@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Backend API Testing for SkillFlow CRM & Billing Controller Dashboard
+Tests all endpoints with session token authentication
+"""
 
 import requests
 import sys
@@ -11,11 +15,12 @@ class SkillFlowAPITester:
     def __init__(self, base_url="https://sdc-manager.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
-        self.session_token = None
+        self.session_token = "test_ho_session_123"  # Provided HO session token
         self.user_id = None
         self.tests_run = 0
         self.tests_passed = 0
         self.test_results = []
+        self.failed_tests = []
 
     def log_result(self, test_name, success, details="", response_data=None):
         """Log test result"""
