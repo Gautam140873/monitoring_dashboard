@@ -74,6 +74,7 @@ export default function Dashboard({ user }) {
   const [dashboardData, setDashboardData] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [showWorkOrderDialog, setShowWorkOrderDialog] = useState(false);
 
   const fetchDashboardData = async () => {
     try {
