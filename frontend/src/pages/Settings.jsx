@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { API } from "@/App";
 import { toast } from "sonner";
@@ -11,7 +11,11 @@ import {
   Trash2,
   Database,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Mail,
+  CheckCircle2,
+  Send,
+  ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
