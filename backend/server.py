@@ -478,7 +478,9 @@ async def create_work_order(wo_data: WorkOrderCreate, user: User = Depends(requi
         "created_by": user.user_id
     }
     
-    await db.work_orders.insert_one(work_order)
+    # Make a copy before insert to avoid _id mutation
+    work_order_to_insert = work_order.copy()
+    await db.work_orders.insert_one(work_order_to_insert)
     
     # Step 4: Auto-create Training Roadmap
     roadmaps = await create_training_roadmap(
@@ -489,10 +491,13 @@ async def create_work_order(wo_data: WorkOrderCreate, user: User = Depends(requi
     
     logger.info(f"Created Work Order {wo_data.work_order_number} for {wo_data.location}")
     
+    # Return clean response without MongoDB _id
+    sdc_clean = {k: v for k, v in sdc.items() if k != "_id"}
+    
     return {
         "message": "Work Order created successfully",
         "work_order": work_order,
-        "sdc": sdc,
+        "sdc": sdc_clean,
         "roadmap_stages": len(roadmaps)
     }
 
