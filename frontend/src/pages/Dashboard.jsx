@@ -309,16 +309,36 @@ export default function Dashboard({ user }) {
         {/* SDC Cards */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-heading font-bold text-xl">SDC Progress</h2>
-          {user?.role === "ho" && (
-            <Button 
-              variant="outline" 
-              onClick={() => navigate("/financial")}
-              data-testid="financial-btn"
-            >
-              Financial Control
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {user?.role === "ho" && (
+              <>
+                <Dialog open={showWorkOrderDialog} onOpenChange={setShowWorkOrderDialog}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="new-work-order-btn">
+                      <Plus className="w-4 h-4 mr-1" />
+                      New Work Order
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <NewWorkOrderForm 
+                      onSuccess={() => {
+                        setShowWorkOrderDialog(false);
+                        fetchDashboardData();
+                      }} 
+                    />
+                  </DialogContent>
+                </Dialog>
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigate("/financial")}
+                  data-testid="financial-btn"
+                >
+                  Financial Control
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="sdc-grid">
