@@ -30,6 +30,17 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# ==================== TRAINING ROADMAP STAGES ====================
+TRAINING_STAGES = [
+    {"stage_id": "mobilization", "name": "Mobilization", "order": 1, "description": "Finding students"},
+    {"stage_id": "dress_distribution", "name": "Dress Distribution", "order": 2, "description": "Uniform distribution"},
+    {"stage_id": "study_material", "name": "Study Material Distribution", "order": 3, "description": "Books and materials"},
+    {"stage_id": "classroom_training", "name": "Classroom Training", "order": 4, "description": "Main training phase"},
+    {"stage_id": "assessment", "name": "Assessment", "order": 5, "description": "Evaluation and certification"},
+    {"stage_id": "ojt", "name": "OJT (On-the-Job Training)", "order": 6, "description": "Practical work experience"},
+    {"stage_id": "placement", "name": "Placement", "order": 7, "description": "Job placement"}
+]
+
 # ==================== MODELS ====================
 
 class User(BaseModel):
@@ -42,61 +53,72 @@ class User(BaseModel):
     assigned_sdc_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class UserSession(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    session_id: str
-    user_id: str
-    session_token: str
-    expires_at: datetime
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
 class SDC(BaseModel):
     model_config = ConfigDict(extra="ignore")
     sdc_id: str = Field(default_factory=lambda: f"sdc_{uuid.uuid4().hex[:8]}")
     name: str
     location: str
+    manager_email: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class JobRole(BaseModel):
+class WorkOrder(BaseModel):
+    """Master Entry - Work Order from HO"""
     model_config = ConfigDict(extra="ignore")
-    job_role_id: str = Field(default_factory=lambda: f"jr_{uuid.uuid4().hex[:8]}")
+    work_order_id: str = Field(default_factory=lambda: f"wo_{uuid.uuid4().hex[:8]}")
+    work_order_number: str
     sdc_id: str
+    location: str
     job_role_code: str
     job_role_name: str
     awarding_body: str
     scheme_name: str
-    training_hours: int
-    cost_per_hour: float
-    target_candidates: int
-    total_value: float = 0
+    total_training_hours: int
+    sessions_per_day: int = 8  # hours per day
+    num_students: int
+    cost_per_student: float
+    total_contract_value: float = 0  # Auto-calculated
+    manager_email: Optional[str] = None
+    start_date: Optional[str] = None  # Set by local manager
+    calculated_end_date: Optional[str] = None  # Auto-calculated
+    manual_end_date: Optional[str] = None  # Override by local manager
+    status: str = "active"  # active, completed, cancelled
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_by: Optional[str] = None
 
-class Batch(BaseModel):
+class TrainingRoadmap(BaseModel):
+    """Training stages for a work order"""
     model_config = ConfigDict(extra="ignore")
-    batch_id: str = Field(default_factory=lambda: f"batch_{uuid.uuid4().hex[:8]}")
+    roadmap_id: str = Field(default_factory=lambda: f"rm_{uuid.uuid4().hex[:8]}")
+    work_order_id: str
     sdc_id: str
-    job_role_id: str
-    work_order_number: str
-    start_date: str
+    stage_id: str
+    stage_name: str
+    stage_order: int
+    target_count: int = 0
+    completed_count: int = 0
+    status: str = "pending"  # pending, in_progress, completed, paid
+    start_date: Optional[str] = None
     end_date: Optional[str] = None
-    mobilized: int = 0
-    in_training: int = 0
-    assessed: int = 0
-    placed: int = 0
-    status: str = "active"  # active, completed
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    notes: Optional[str] = None
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Invoice(BaseModel):
     model_config = ConfigDict(extra="ignore")
     invoice_id: str = Field(default_factory=lambda: f"inv_{uuid.uuid4().hex[:8]}")
     sdc_id: str
-    batch_id: Optional[str] = None
+    work_order_id: Optional[str] = None
     invoice_number: str
     invoice_date: str
-    amount: float
-    status: str = "pending"  # pending, paid
+    order_value: float  # What was contracted
+    billing_value: float  # What we actually billed
+    variance: float = 0  # Auto-calculated: order_value - billing_value
+    variance_percent: float = 0
+    payment_received: float = 0
+    outstanding: float = 0  # Auto-calculated: billing_value - payment_received
+    status: str = "pending"  # pending, partial, paid
     payment_date: Optional[str] = None
+    notes: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Holiday(BaseModel):
@@ -105,6 +127,8 @@ class Holiday(BaseModel):
     date: str
     name: str
     year: int
+    is_local: bool = False
+    sdc_id: Optional[str] = None  # If local holiday
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Alert(BaseModel):
@@ -112,7 +136,8 @@ class Alert(BaseModel):
     alert_id: str = Field(default_factory=lambda: f"alert_{uuid.uuid4().hex[:8]}")
     sdc_id: str
     sdc_name: str
-    alert_type: str  # overdue, variance
+    work_order_id: Optional[str] = None
+    alert_type: str  # overdue, variance, blocker
     message: str
     severity: str  # high, medium, low
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -126,46 +151,49 @@ class SessionRequest(BaseModel):
 class SDCCreate(BaseModel):
     name: str
     location: str
+    manager_email: Optional[str] = None
 
-class JobRoleCreate(BaseModel):
-    sdc_id: str
+class WorkOrderCreate(BaseModel):
+    work_order_number: str
+    location: str  # Used to auto-create SDC if not exists
     job_role_code: str
     job_role_name: str
     awarding_body: str
     scheme_name: str
-    training_hours: int
-    cost_per_hour: float
-    target_candidates: int
+    total_training_hours: int
+    sessions_per_day: int = 8
+    num_students: int
+    cost_per_student: float
+    manager_email: Optional[str] = None
 
-class BatchCreate(BaseModel):
-    sdc_id: str
-    job_role_id: str
-    work_order_number: str
+class WorkOrderStartDate(BaseModel):
     start_date: str
-    mobilized: int = 0
+    manual_end_date: Optional[str] = None
 
-class BatchUpdate(BaseModel):
-    mobilized: Optional[int] = None
-    in_training: Optional[int] = None
-    assessed: Optional[int] = None
-    placed: Optional[int] = None
+class RoadmapUpdate(BaseModel):
+    completed_count: Optional[int] = None
     status: Optional[str] = None
+    notes: Optional[str] = None
 
 class InvoiceCreate(BaseModel):
     sdc_id: str
-    batch_id: Optional[str] = None
+    work_order_id: Optional[str] = None
     invoice_number: str
     invoice_date: str
-    amount: float
+    order_value: float
+    billing_value: float
+    notes: Optional[str] = None
 
-class InvoiceUpdate(BaseModel):
-    status: Optional[str] = None
+class PaymentUpdate(BaseModel):
+    payment_received: float
     payment_date: Optional[str] = None
 
 class HolidayCreate(BaseModel):
     date: str
     name: str
     year: int
+    is_local: bool = False
+    sdc_id: Optional[str] = None
 
 class UserRoleUpdate(BaseModel):
     role: str
@@ -184,12 +212,10 @@ async def get_current_user(request: Request) -> User:
     if not session_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    # Find session
     session_doc = await db.user_sessions.find_one({"session_token": session_token}, {"_id": 0})
     if not session_doc:
         raise HTTPException(status_code=401, detail="Invalid session")
     
-    # Check expiry
     expires_at = session_doc["expires_at"]
     if isinstance(expires_at, str):
         expires_at = datetime.fromisoformat(expires_at)
@@ -198,7 +224,6 @@ async def get_current_user(request: Request) -> User:
     if expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Session expired")
     
-    # Get user
     user_doc = await db.users.find_one({"user_id": session_doc["user_id"]}, {"_id": 0})
     if not user_doc:
         raise HTTPException(status_code=401, detail="User not found")
@@ -213,13 +238,18 @@ async def require_ho_role(user: User = Depends(get_current_user)) -> User:
 
 # ==================== DATE CALCULATION ====================
 
-def calculate_end_date(start_date: str, training_hours: int, hours_per_day: int = 8, holidays: List[str] = None) -> str:
+async def calculate_end_date(start_date: str, training_hours: int, sessions_per_day: int = 8, sdc_id: str = None) -> str:
     """Calculate training end date skipping Sundays and holidays"""
-    if holidays is None:
-        holidays = []
+    # Get all holidays
+    holiday_query = {"$or": [{"is_local": False}]}
+    if sdc_id:
+        holiday_query["$or"].append({"sdc_id": sdc_id, "is_local": True})
+    
+    holidays_docs = await db.holidays.find(holiday_query, {"_id": 0}).to_list(1000)
+    holidays = [h["date"] for h in holidays_docs]
     
     start = datetime.strptime(start_date, "%Y-%m-%d")
-    training_days = (training_hours + hours_per_day - 1) // hours_per_day  # Ceil division
+    training_days = (training_hours + sessions_per_day - 1) // sessions_per_day  # Ceil division
     
     current_date = start
     days_counted = 0
@@ -235,6 +265,59 @@ def calculate_end_date(start_date: str, training_hours: int, hours_per_day: int 
             current_date += timedelta(days=1)
     
     return current_date.strftime("%Y-%m-%d")
+
+# ==================== AUTO SDC CREATION ====================
+
+async def get_or_create_sdc(location: str, manager_email: str = None) -> dict:
+    """Get existing SDC or create new one based on location"""
+    # Normalize location for matching
+    location_key = location.lower().replace(" ", "_").replace(",", "")
+    sdc_id = f"sdc_{location_key}"
+    
+    existing = await db.sdcs.find_one({"sdc_id": sdc_id}, {"_id": 0})
+    if existing:
+        return existing
+    
+    # Create new SDC
+    sdc_name = f"SDC {location.title()}"
+    sdc = {
+        "sdc_id": sdc_id,
+        "name": sdc_name,
+        "location": location,
+        "manager_email": manager_email,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_updated": datetime.now(timezone.utc).isoformat()
+    }
+    await db.sdcs.insert_one(sdc)
+    logger.info(f"Auto-created SDC: {sdc_name} for location: {location}")
+    
+    return sdc
+
+async def create_training_roadmap(work_order_id: str, sdc_id: str, num_students: int):
+    """Create training roadmap stages for a work order"""
+    roadmaps = []
+    for stage in TRAINING_STAGES:
+        roadmap = {
+            "roadmap_id": f"rm_{uuid.uuid4().hex[:8]}",
+            "work_order_id": work_order_id,
+            "sdc_id": sdc_id,
+            "stage_id": stage["stage_id"],
+            "stage_name": stage["name"],
+            "stage_order": stage["order"],
+            "target_count": num_students,
+            "completed_count": 0,
+            "status": "pending",
+            "start_date": None,
+            "end_date": None,
+            "notes": None,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        roadmaps.append(roadmap)
+    
+    if roadmaps:
+        await db.training_roadmaps.insert_many(roadmaps)
+    
+    return roadmaps
 
 # ==================== AUTH ENDPOINTS ====================
 
@@ -261,12 +344,10 @@ async def process_session(req: SessionRequest, response: Response):
     picture = auth_data.get("picture")
     session_token = auth_data.get("session_token")
     
-    # Check if user exists
     existing_user = await db.users.find_one({"email": email}, {"_id": 0})
     
     if existing_user:
         user_id = existing_user["user_id"]
-        # Update user info
         await db.users.update_one(
             {"user_id": user_id},
             {"$set": {"name": name, "picture": picture}}
@@ -274,14 +355,13 @@ async def process_session(req: SessionRequest, response: Response):
         role = existing_user.get("role", "sdc")
         assigned_sdc_id = existing_user.get("assigned_sdc_id")
     else:
-        # Create new user
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         new_user = {
             "user_id": user_id,
             "email": email,
             "name": name,
             "picture": picture,
-            "role": "sdc",  # Default role
+            "role": "sdc",
             "assigned_sdc_id": None,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -289,7 +369,6 @@ async def process_session(req: SessionRequest, response: Response):
         role = "sdc"
         assigned_sdc_id = None
     
-    # Create session
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     session_doc = {
         "session_id": req.session_id,
@@ -299,11 +378,9 @@ async def process_session(req: SessionRequest, response: Response):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
-    # Delete old sessions for this user
     await db.user_sessions.delete_many({"user_id": user_id})
     await db.user_sessions.insert_one(session_doc)
     
-    # Set cookie
     response.set_cookie(
         key="session_token",
         value=session_token,
@@ -364,6 +441,200 @@ async def update_user_role(user_id: str, role_update: UserRoleUpdate, user: User
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "Role updated successfully"}
 
+# ==================== WORK ORDER ENDPOINTS (MASTER ENTRY) ====================
+
+@api_router.post("/work-orders")
+async def create_work_order(wo_data: WorkOrderCreate, user: User = Depends(require_ho_role)):
+    """Create a new Work Order (Master Entry) - HO Only
+    This automatically creates SDC if not exists and creates training roadmap
+    """
+    # Step 1: Get or create SDC based on location
+    sdc = await get_or_create_sdc(wo_data.location, wo_data.manager_email)
+    
+    # Step 2: Calculate total contract value
+    total_contract_value = wo_data.num_students * wo_data.cost_per_student
+    
+    # Step 3: Create Work Order
+    work_order = {
+        "work_order_id": f"wo_{uuid.uuid4().hex[:8]}",
+        "work_order_number": wo_data.work_order_number,
+        "sdc_id": sdc["sdc_id"],
+        "location": wo_data.location,
+        "job_role_code": wo_data.job_role_code,
+        "job_role_name": wo_data.job_role_name,
+        "awarding_body": wo_data.awarding_body,
+        "scheme_name": wo_data.scheme_name,
+        "total_training_hours": wo_data.total_training_hours,
+        "sessions_per_day": wo_data.sessions_per_day,
+        "num_students": wo_data.num_students,
+        "cost_per_student": wo_data.cost_per_student,
+        "total_contract_value": total_contract_value,
+        "manager_email": wo_data.manager_email,
+        "start_date": None,
+        "calculated_end_date": None,
+        "manual_end_date": None,
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.user_id
+    }
+    
+    await db.work_orders.insert_one(work_order)
+    
+    # Step 4: Auto-create Training Roadmap
+    roadmaps = await create_training_roadmap(
+        work_order["work_order_id"], 
+        sdc["sdc_id"], 
+        wo_data.num_students
+    )
+    
+    logger.info(f"Created Work Order {wo_data.work_order_number} for {wo_data.location}")
+    
+    return {
+        "message": "Work Order created successfully",
+        "work_order": work_order,
+        "sdc": sdc,
+        "roadmap_stages": len(roadmaps)
+    }
+
+@api_router.get("/work-orders")
+async def list_work_orders(user: User = Depends(get_current_user)):
+    """List work orders (filtered by role)"""
+    query = {}
+    if user.role != "ho" and user.assigned_sdc_id:
+        query["sdc_id"] = user.assigned_sdc_id
+    
+    work_orders = await db.work_orders.find(query, {"_id": 0}).to_list(1000)
+    return work_orders
+
+@api_router.get("/work-orders/{work_order_id}")
+async def get_work_order(work_order_id: str, user: User = Depends(get_current_user)):
+    """Get work order details with roadmap"""
+    work_order = await db.work_orders.find_one({"work_order_id": work_order_id}, {"_id": 0})
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work Order not found")
+    
+    # Check access
+    if user.role != "ho" and user.assigned_sdc_id != work_order["sdc_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get roadmap
+    roadmap = await db.training_roadmaps.find(
+        {"work_order_id": work_order_id}, 
+        {"_id": 0}
+    ).sort("stage_order", 1).to_list(100)
+    
+    # Get invoices
+    invoices = await db.invoices.find(
+        {"work_order_id": work_order_id}, 
+        {"_id": 0}
+    ).to_list(100)
+    
+    return {
+        **work_order,
+        "roadmap": roadmap,
+        "invoices": invoices
+    }
+
+@api_router.put("/work-orders/{work_order_id}/start-date")
+async def set_work_order_start_date(
+    work_order_id: str, 
+    date_data: WorkOrderStartDate, 
+    user: User = Depends(get_current_user)
+):
+    """Set start date for work order (Local Manager)
+    This auto-calculates end date based on training hours and holidays
+    """
+    work_order = await db.work_orders.find_one({"work_order_id": work_order_id}, {"_id": 0})
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work Order not found")
+    
+    # Check access
+    if user.role != "ho" and user.assigned_sdc_id != work_order["sdc_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Calculate end date
+    calculated_end_date = await calculate_end_date(
+        date_data.start_date,
+        work_order["total_training_hours"],
+        work_order.get("sessions_per_day", 8),
+        work_order["sdc_id"]
+    )
+    
+    update_data = {
+        "start_date": date_data.start_date,
+        "calculated_end_date": calculated_end_date
+    }
+    
+    # Allow manual override
+    if date_data.manual_end_date:
+        update_data["manual_end_date"] = date_data.manual_end_date
+    
+    await db.work_orders.update_one(
+        {"work_order_id": work_order_id},
+        {"$set": update_data}
+    )
+    
+    # Update first roadmap stage
+    await db.training_roadmaps.update_one(
+        {"work_order_id": work_order_id, "stage_order": 1},
+        {"$set": {"status": "in_progress", "start_date": date_data.start_date}}
+    )
+    
+    return {
+        "message": "Start date set successfully",
+        "start_date": date_data.start_date,
+        "calculated_end_date": calculated_end_date,
+        "manual_end_date": date_data.manual_end_date
+    }
+
+# ==================== TRAINING ROADMAP ENDPOINTS ====================
+
+@api_router.get("/roadmap/{work_order_id}")
+async def get_roadmap(work_order_id: str, user: User = Depends(get_current_user)):
+    """Get training roadmap for a work order"""
+    work_order = await db.work_orders.find_one({"work_order_id": work_order_id}, {"_id": 0})
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work Order not found")
+    
+    if user.role != "ho" and user.assigned_sdc_id != work_order["sdc_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    roadmap = await db.training_roadmaps.find(
+        {"work_order_id": work_order_id}, 
+        {"_id": 0}
+    ).sort("stage_order", 1).to_list(100)
+    
+    return roadmap
+
+@api_router.put("/roadmap/{roadmap_id}")
+async def update_roadmap_stage(
+    roadmap_id: str, 
+    update: RoadmapUpdate, 
+    user: User = Depends(get_current_user)
+):
+    """Update a roadmap stage"""
+    roadmap = await db.training_roadmaps.find_one({"roadmap_id": roadmap_id}, {"_id": 0})
+    if not roadmap:
+        raise HTTPException(status_code=404, detail="Roadmap stage not found")
+    
+    if user.role != "ho" and user.assigned_sdc_id != roadmap["sdc_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if update.completed_count is not None:
+        update_data["completed_count"] = update.completed_count
+    if update.status:
+        update_data["status"] = update.status
+    if update.notes:
+        update_data["notes"] = update.notes
+    
+    await db.training_roadmaps.update_one(
+        {"roadmap_id": roadmap_id},
+        {"$set": update_data}
+    )
+    
+    return {"message": "Roadmap stage updated"}
+
 # ==================== SDC ENDPOINTS ====================
 
 @api_router.get("/sdcs")
@@ -381,17 +652,19 @@ async def list_sdcs(user: User = Depends(get_current_user)):
 @api_router.post("/sdcs")
 async def create_sdc(sdc_data: SDCCreate, user: User = Depends(require_ho_role)):
     """Create new SDC (HO only)"""
-    sdc = SDC(**sdc_data.model_dump())
-    sdc_dict = sdc.model_dump()
-    sdc_dict["created_at"] = sdc_dict["created_at"].isoformat()
-    sdc_dict["last_updated"] = sdc_dict["last_updated"].isoformat()
-    await db.sdcs.insert_one(sdc_dict)
-    return sdc_dict
+    sdc = await get_or_create_sdc(sdc_data.location, sdc_data.manager_email)
+    # Update name if different
+    if sdc_data.name != sdc["name"]:
+        await db.sdcs.update_one(
+            {"sdc_id": sdc["sdc_id"]},
+            {"$set": {"name": sdc_data.name}}
+        )
+        sdc["name"] = sdc_data.name
+    return sdc
 
 @api_router.get("/sdcs/{sdc_id}")
 async def get_sdc(sdc_id: str, user: User = Depends(get_current_user)):
-    """Get SDC details with progress"""
-    # Check access
+    """Get SDC details with work orders and progress"""
     if user.role != "ho" and user.assigned_sdc_id != sdc_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
@@ -399,40 +672,48 @@ async def get_sdc(sdc_id: str, user: User = Depends(get_current_user)):
     if not sdc:
         raise HTTPException(status_code=404, detail="SDC not found")
     
-    # Get batches for this SDC
-    batches = await db.batches.find({"sdc_id": sdc_id}, {"_id": 0}).to_list(1000)
+    # Get work orders
+    work_orders = await db.work_orders.find({"sdc_id": sdc_id}, {"_id": 0}).to_list(1000)
     
-    # Calculate progress
-    total_mobilized = sum(b.get("mobilized", 0) for b in batches)
-    total_in_training = sum(b.get("in_training", 0) for b in batches)
-    total_assessed = sum(b.get("assessed", 0) for b in batches)
-    total_placed = sum(b.get("placed", 0) for b in batches)
+    # Calculate overall progress from roadmaps
+    roadmaps = await db.training_roadmaps.find({"sdc_id": sdc_id}, {"_id": 0}).to_list(1000)
     
-    # Get job roles
-    job_roles = await db.job_roles.find({"sdc_id": sdc_id}, {"_id": 0}).to_list(1000)
+    # Group by stage
+    stage_progress = {}
+    for stage in TRAINING_STAGES:
+        stage_roadmaps = [r for r in roadmaps if r["stage_id"] == stage["stage_id"]]
+        total_target = sum(r.get("target_count", 0) for r in stage_roadmaps)
+        total_completed = sum(r.get("completed_count", 0) for r in stage_roadmaps)
+        stage_progress[stage["stage_id"]] = {
+            "name": stage["name"],
+            "order": stage["order"],
+            "target": total_target,
+            "completed": total_completed,
+            "percent": round((total_completed / total_target * 100) if total_target > 0 else 0, 1)
+        }
     
     # Get invoices
     invoices = await db.invoices.find({"sdc_id": sdc_id}, {"_id": 0}).to_list(1000)
-    total_billed = sum(inv.get("amount", 0) for inv in invoices)
-    total_paid = sum(inv.get("amount", 0) for inv in invoices if inv.get("status") == "paid")
-    outstanding = total_billed - total_paid
+    total_order_value = sum(inv.get("order_value", 0) for inv in invoices)
+    total_billed = sum(inv.get("billing_value", 0) for inv in invoices)
+    total_paid = sum(inv.get("payment_received", 0) for inv in invoices)
+    total_outstanding = sum(inv.get("outstanding", 0) for inv in invoices)
+    
+    # Contract values from work orders
+    total_contract = sum(wo.get("total_contract_value", 0) for wo in work_orders)
     
     return {
         **sdc,
-        "progress": {
-            "mobilized": total_mobilized,
-            "in_training": total_in_training,
-            "assessed": total_assessed,
-            "placed": total_placed,
-            "placement_percent": round((total_placed / total_mobilized * 100) if total_mobilized > 0 else 0, 1)
-        },
+        "work_orders": work_orders,
+        "stage_progress": stage_progress,
         "financial": {
+            "total_contract": total_contract,
+            "total_order_value": total_order_value,
             "total_billed": total_billed,
             "total_paid": total_paid,
-            "outstanding": outstanding
+            "total_outstanding": total_outstanding,
+            "variance": total_order_value - total_billed if total_order_value > 0 else 0
         },
-        "job_roles": job_roles,
-        "batches": batches,
         "invoices": invoices
     }
 
@@ -444,103 +725,62 @@ async def delete_sdc(sdc_id: str, user: User = Depends(require_ho_role)):
         raise HTTPException(status_code=404, detail="SDC not found")
     
     # Delete related data
-    await db.job_roles.delete_many({"sdc_id": sdc_id})
-    await db.batches.delete_many({"sdc_id": sdc_id})
+    await db.work_orders.delete_many({"sdc_id": sdc_id})
+    await db.training_roadmaps.delete_many({"sdc_id": sdc_id})
     await db.invoices.delete_many({"sdc_id": sdc_id})
     
     return {"message": "SDC deleted successfully"}
 
-# ==================== JOB ROLE ENDPOINTS ====================
+# ==================== INVOICE & BILLING ENDPOINTS ====================
 
-@api_router.get("/job-roles")
-async def list_job_roles(sdc_id: Optional[str] = None, user: User = Depends(get_current_user)):
-    """List job roles"""
-    query = {}
-    if user.role != "ho":
-        if user.assigned_sdc_id:
-            query["sdc_id"] = user.assigned_sdc_id
-        else:
-            return []
-    elif sdc_id:
-        query["sdc_id"] = sdc_id
-    
-    job_roles = await db.job_roles.find(query, {"_id": 0}).to_list(1000)
-    return job_roles
-
-@api_router.post("/job-roles")
-async def create_job_role(job_role_data: JobRoleCreate, user: User = Depends(require_ho_role)):
-    """Create job role (HO only)"""
-    job_role = JobRole(**job_role_data.model_dump())
-    job_role.total_value = job_role.training_hours * job_role.cost_per_hour * job_role.target_candidates
-    
-    job_role_dict = job_role.model_dump()
-    job_role_dict["created_at"] = job_role_dict["created_at"].isoformat()
-    await db.job_roles.insert_one(job_role_dict)
-    return job_role_dict
-
-# ==================== BATCH ENDPOINTS ====================
-
-@api_router.get("/batches")
-async def list_batches(sdc_id: Optional[str] = None, user: User = Depends(get_current_user)):
-    """List batches"""
-    query = {}
-    if user.role != "ho":
-        if user.assigned_sdc_id:
-            query["sdc_id"] = user.assigned_sdc_id
-        else:
-            return []
-    elif sdc_id:
-        query["sdc_id"] = sdc_id
-    
-    batches = await db.batches.find(query, {"_id": 0}).to_list(1000)
-    return batches
-
-@api_router.post("/batches")
-async def create_batch(batch_data: BatchCreate, user: User = Depends(get_current_user)):
-    """Create batch"""
-    # Check access
-    if user.role != "ho" and user.assigned_sdc_id != batch_data.sdc_id:
+@api_router.post("/invoices")
+async def create_invoice(invoice_data: InvoiceCreate, user: User = Depends(get_current_user)):
+    """Create invoice with variance calculation"""
+    if user.role != "ho" and user.assigned_sdc_id != invoice_data.sdc_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Get job role for training hours
-    job_role = await db.job_roles.find_one({"job_role_id": batch_data.job_role_id}, {"_id": 0})
-    if not job_role:
-        raise HTTPException(status_code=404, detail="Job role not found")
+    # Calculate variance and outstanding
+    variance = invoice_data.order_value - invoice_data.billing_value
+    variance_percent = round((variance / invoice_data.order_value * 100) if invoice_data.order_value > 0 else 0, 1)
+    outstanding = invoice_data.billing_value  # Initially, all billed is outstanding
     
-    # Get holidays
-    holidays_docs = await db.holidays.find({}, {"_id": 0}).to_list(1000)
-    holidays = [h["date"] for h in holidays_docs]
+    invoice = {
+        "invoice_id": f"inv_{uuid.uuid4().hex[:8]}",
+        "sdc_id": invoice_data.sdc_id,
+        "work_order_id": invoice_data.work_order_id,
+        "invoice_number": invoice_data.invoice_number,
+        "invoice_date": invoice_data.invoice_date,
+        "order_value": invoice_data.order_value,
+        "billing_value": invoice_data.billing_value,
+        "variance": variance,
+        "variance_percent": variance_percent,
+        "payment_received": 0,
+        "outstanding": outstanding,
+        "status": "pending",
+        "payment_date": None,
+        "notes": invoice_data.notes,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
     
-    # Calculate end date
-    end_date = calculate_end_date(batch_data.start_date, job_role["training_hours"], holidays=holidays)
+    await db.invoices.insert_one(invoice)
     
-    batch = Batch(**batch_data.model_dump())
-    batch.end_date = end_date
+    # Check if variance is significant (>10%)
+    if abs(variance_percent) > 10:
+        sdc = await db.sdcs.find_one({"sdc_id": invoice_data.sdc_id}, {"_id": 0})
+        alert = {
+            "alert_id": f"alert_{uuid.uuid4().hex[:8]}",
+            "sdc_id": invoice_data.sdc_id,
+            "sdc_name": sdc["name"] if sdc else invoice_data.sdc_id,
+            "work_order_id": invoice_data.work_order_id,
+            "alert_type": "variance",
+            "message": f"Billing variance of {variance_percent}% detected on invoice {invoice_data.invoice_number}",
+            "severity": "high" if abs(variance_percent) > 25 else "medium",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "resolved": False
+        }
+        await db.alerts.insert_one(alert)
     
-    batch_dict = batch.model_dump()
-    batch_dict["created_at"] = batch_dict["created_at"].isoformat()
-    await db.batches.insert_one(batch_dict)
-    return batch_dict
-
-@api_router.put("/batches/{batch_id}")
-async def update_batch(batch_id: str, batch_update: BatchUpdate, user: User = Depends(get_current_user)):
-    """Update batch progress"""
-    batch = await db.batches.find_one({"batch_id": batch_id}, {"_id": 0})
-    if not batch:
-        raise HTTPException(status_code=404, detail="Batch not found")
-    
-    # Check access
-    if user.role != "ho" and user.assigned_sdc_id != batch["sdc_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    update_data = {k: v for k, v in batch_update.model_dump().items() if v is not None}
-    if update_data:
-        await db.batches.update_one({"batch_id": batch_id}, {"$set": update_data})
-    
-    updated_batch = await db.batches.find_one({"batch_id": batch_id}, {"_id": 0})
-    return updated_batch
-
-# ==================== INVOICE ENDPOINTS ====================
+    return invoice
 
 @api_router.get("/invoices")
 async def list_invoices(sdc_id: Optional[str] = None, user: User = Depends(get_current_user)):
@@ -557,71 +797,116 @@ async def list_invoices(sdc_id: Optional[str] = None, user: User = Depends(get_c
     invoices = await db.invoices.find(query, {"_id": 0}).to_list(1000)
     return invoices
 
-@api_router.post("/invoices")
-async def create_invoice(invoice_data: InvoiceCreate, user: User = Depends(get_current_user)):
-    """Create invoice"""
-    # Check access
-    if user.role != "ho" and user.assigned_sdc_id != invoice_data.sdc_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    invoice = Invoice(**invoice_data.model_dump())
-    invoice_dict = invoice.model_dump()
-    invoice_dict["created_at"] = invoice_dict["created_at"].isoformat()
-    await db.invoices.insert_one(invoice_dict)
-    return invoice_dict
-
-@api_router.put("/invoices/{invoice_id}")
-async def update_invoice(invoice_id: str, invoice_update: InvoiceUpdate, user: User = Depends(get_current_user)):
-    """Update invoice status"""
+@api_router.put("/invoices/{invoice_id}/payment")
+async def record_payment(invoice_id: str, payment: PaymentUpdate, user: User = Depends(get_current_user)):
+    """Record payment received - triggers status update"""
     invoice = await db.invoices.find_one({"invoice_id": invoice_id}, {"_id": 0})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
-    # Check access
     if user.role != "ho" and user.assigned_sdc_id != invoice["sdc_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    update_data = {k: v for k, v in invoice_update.model_dump().items() if v is not None}
-    if update_data:
-        await db.invoices.update_one({"invoice_id": invoice_id}, {"$set": update_data})
+    # Calculate new outstanding
+    new_payment = payment.payment_received
+    new_outstanding = invoice["billing_value"] - new_payment
     
-    updated_invoice = await db.invoices.find_one({"invoice_id": invoice_id}, {"_id": 0})
-    return updated_invoice
+    # Determine status
+    if new_outstanding <= 0:
+        new_status = "paid"
+    elif new_payment > 0:
+        new_status = "partial"
+    else:
+        new_status = "pending"
+    
+    await db.invoices.update_one(
+        {"invoice_id": invoice_id},
+        {"$set": {
+            "payment_received": new_payment,
+            "outstanding": max(0, new_outstanding),
+            "status": new_status,
+            "payment_date": payment.payment_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        }}
+    )
+    
+    # PAYMENT TRIGGER: If fully paid, mark related roadmap stages as PAID
+    if new_status == "paid" and invoice.get("work_order_id"):
+        await db.training_roadmaps.update_many(
+            {"work_order_id": invoice["work_order_id"], "status": "completed"},
+            {"$set": {"status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        logger.info(f"Payment trigger: Marked roadmap stages as PAID for work order {invoice['work_order_id']}")
+    
+    return {
+        "message": "Payment recorded",
+        "new_status": new_status,
+        "outstanding": max(0, new_outstanding)
+    }
 
 # ==================== HOLIDAY ENDPOINTS ====================
 
 @api_router.get("/holidays")
-async def list_holidays(year: Optional[int] = None, user: User = Depends(get_current_user)):
+async def list_holidays(year: Optional[int] = None, sdc_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """List holidays"""
     query = {}
     if year:
         query["year"] = year
+    if sdc_id:
+        query["$or"] = [{"is_local": False}, {"sdc_id": sdc_id}]
+    
     holidays = await db.holidays.find(query, {"_id": 0}).to_list(1000)
     return holidays
 
 @api_router.post("/holidays")
-async def create_holiday(holiday_data: HolidayCreate, user: User = Depends(require_ho_role)):
-    """Create holiday (HO only)"""
-    holiday = Holiday(**holiday_data.model_dump())
-    holiday_dict = holiday.model_dump()
-    holiday_dict["created_at"] = holiday_dict["created_at"].isoformat()
-    await db.holidays.insert_one(holiday_dict)
-    return holiday_dict
+async def create_holiday(holiday_data: HolidayCreate, user: User = Depends(get_current_user)):
+    """Create holiday (HO for global, Local Manager for local)"""
+    if holiday_data.is_local:
+        # Local holiday - check SDC access
+        if not holiday_data.sdc_id:
+            raise HTTPException(status_code=400, detail="SDC ID required for local holiday")
+        if user.role != "ho" and user.assigned_sdc_id != holiday_data.sdc_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        # Global holiday - HO only
+        if user.role != "ho":
+            raise HTTPException(status_code=403, detail="HO access required for global holidays")
+    
+    holiday = {
+        "holiday_id": f"hol_{uuid.uuid4().hex[:8]}",
+        "date": holiday_data.date,
+        "name": holiday_data.name,
+        "year": holiday_data.year,
+        "is_local": holiday_data.is_local,
+        "sdc_id": holiday_data.sdc_id if holiday_data.is_local else None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.holidays.insert_one(holiday)
+    return holiday
 
 @api_router.delete("/holidays/{holiday_id}")
-async def delete_holiday(holiday_id: str, user: User = Depends(require_ho_role)):
-    """Delete holiday (HO only)"""
-    result = await db.holidays.delete_one({"holiday_id": holiday_id})
-    if result.deleted_count == 0:
+async def delete_holiday(holiday_id: str, user: User = Depends(get_current_user)):
+    """Delete holiday"""
+    holiday = await db.holidays.find_one({"holiday_id": holiday_id}, {"_id": 0})
+    if not holiday:
         raise HTTPException(status_code=404, detail="Holiday not found")
-    return {"message": "Holiday deleted successfully"}
+    
+    # Check access
+    if holiday.get("is_local"):
+        if user.role != "ho" and user.assigned_sdc_id != holiday.get("sdc_id"):
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        if user.role != "ho":
+            raise HTTPException(status_code=403, detail="HO access required")
+    
+    await db.holidays.delete_one({"holiday_id": holiday_id})
+    return {"message": "Holiday deleted"}
 
 # ==================== DASHBOARD ENDPOINTS ====================
 
 @api_router.get("/dashboard/overview")
 async def get_dashboard_overview(user: User = Depends(get_current_user)):
     """Get dashboard overview with commercial health metrics"""
-    # Build query based on role
     sdc_query = {}
     if user.role != "ho" and user.assigned_sdc_id:
         sdc_query["sdc_id"] = user.assigned_sdc_id
@@ -629,22 +914,28 @@ async def get_dashboard_overview(user: User = Depends(get_current_user)):
     # Get all SDCs
     sdcs = await db.sdcs.find(sdc_query, {"_id": 0}).to_list(1000)
     
-    # Get all job roles for total portfolio
-    job_roles = await db.job_roles.find(sdc_query, {"_id": 0}).to_list(1000)
-    total_portfolio = sum(jr.get("total_value", 0) for jr in job_roles)
+    # Get work orders for total portfolio
+    work_orders = await db.work_orders.find(sdc_query, {"_id": 0}).to_list(1000)
+    total_portfolio = sum(wo.get("total_contract_value", 0) for wo in work_orders)
     
     # Get all invoices
     invoices = await db.invoices.find(sdc_query, {"_id": 0}).to_list(1000)
-    total_billed = sum(inv.get("amount", 0) for inv in invoices)
-    total_paid = sum(inv.get("amount", 0) for inv in invoices if inv.get("status") == "paid")
-    outstanding = total_billed - total_paid
+    total_billed = sum(inv.get("billing_value", 0) for inv in invoices)
+    total_paid = sum(inv.get("payment_received", 0) for inv in invoices)
+    outstanding = sum(inv.get("outstanding", 0) for inv in invoices)
     
-    # Get all batches for progress
-    batches = await db.batches.find(sdc_query, {"_id": 0}).to_list(1000)
-    total_mobilized = sum(b.get("mobilized", 0) for b in batches)
-    total_in_training = sum(b.get("in_training", 0) for b in batches)
-    total_assessed = sum(b.get("assessed", 0) for b in batches)
-    total_placed = sum(b.get("placed", 0) for b in batches)
+    # Get all roadmaps for progress
+    roadmaps = await db.training_roadmaps.find(sdc_query, {"_id": 0}).to_list(1000)
+    
+    # Calculate stage totals
+    stage_totals = {}
+    for stage in TRAINING_STAGES:
+        stage_roadmaps = [r for r in roadmaps if r["stage_id"] == stage["stage_id"]]
+        stage_totals[stage["stage_id"]] = {
+            "name": stage["name"],
+            "target": sum(r.get("target_count", 0) for r in stage_roadmaps),
+            "completed": sum(r.get("completed_count", 0) for r in stage_roadmaps)
+        }
     
     # Calculate variance
     variance = total_portfolio - total_billed
@@ -652,38 +943,53 @@ async def get_dashboard_overview(user: User = Depends(get_current_user)):
     
     # Build SDC summaries
     sdc_summaries = []
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
     for sdc in sdcs:
-        sdc_batches = [b for b in batches if b.get("sdc_id") == sdc["sdc_id"]]
-        sdc_invoices = [inv for inv in invoices if inv.get("sdc_id") == sdc["sdc_id"]]
-        sdc_job_roles = [jr for jr in job_roles if jr.get("sdc_id") == sdc["sdc_id"]]
+        sdc_id = sdc["sdc_id"]
+        sdc_work_orders = [wo for wo in work_orders if wo.get("sdc_id") == sdc_id]
+        sdc_invoices = [inv for inv in invoices if inv.get("sdc_id") == sdc_id]
+        sdc_roadmaps = [r for r in roadmaps if r.get("sdc_id") == sdc_id]
         
-        sdc_mobilized = sum(b.get("mobilized", 0) for b in sdc_batches)
-        sdc_in_training = sum(b.get("in_training", 0) for b in sdc_batches)
-        sdc_assessed = sum(b.get("assessed", 0) for b in sdc_batches)
-        sdc_placed = sum(b.get("placed", 0) for b in sdc_batches)
-        sdc_billed = sum(inv.get("amount", 0) for inv in sdc_invoices)
-        sdc_paid = sum(inv.get("amount", 0) for inv in sdc_invoices if inv.get("status") == "paid")
-        sdc_portfolio = sum(jr.get("total_value", 0) for jr in sdc_job_roles)
+        sdc_portfolio = sum(wo.get("total_contract_value", 0) for wo in sdc_work_orders)
+        sdc_billed = sum(inv.get("billing_value", 0) for inv in sdc_invoices)
+        sdc_paid = sum(inv.get("payment_received", 0) for inv in sdc_invoices)
+        sdc_outstanding = sum(inv.get("outstanding", 0) for inv in sdc_invoices)
+        
+        # Stage progress for this SDC
+        sdc_stage_progress = {}
+        for stage in TRAINING_STAGES:
+            stage_rms = [r for r in sdc_roadmaps if r["stage_id"] == stage["stage_id"]]
+            sdc_stage_progress[stage["stage_id"]] = {
+                "target": sum(r.get("target_count", 0) for r in stage_rms),
+                "completed": sum(r.get("completed_count", 0) for r in stage_rms)
+            }
+        
+        # Check for overdue work orders
+        overdue_count = sum(1 for wo in sdc_work_orders 
+                          if wo.get("calculated_end_date") and wo["calculated_end_date"] < today 
+                          and wo.get("status") == "active")
+        
+        # Check for blockers (incomplete stages with notes)
+        blockers = [r.get("notes") for r in sdc_roadmaps 
+                   if r.get("notes") and r.get("status") not in ["completed", "paid"]]
         
         sdc_summaries.append({
-            "sdc_id": sdc["sdc_id"],
+            "sdc_id": sdc_id,
             "name": sdc["name"],
             "location": sdc["location"],
-            "progress": {
-                "mobilized": sdc_mobilized,
-                "in_training": sdc_in_training,
-                "assessed": sdc_assessed,
-                "placed": sdc_placed,
-                "total": sdc_mobilized,
-                "placement_percent": round((sdc_placed / sdc_mobilized * 100) if sdc_mobilized > 0 else 0, 1)
-            },
+            "manager_email": sdc.get("manager_email"),
+            "progress": sdc_stage_progress,
             "financial": {
                 "portfolio": sdc_portfolio,
                 "billed": sdc_billed,
                 "paid": sdc_paid,
-                "outstanding": sdc_billed - sdc_paid,
+                "outstanding": sdc_outstanding,
                 "variance": sdc_portfolio - sdc_billed
-            }
+            },
+            "work_orders_count": len(sdc_work_orders),
+            "overdue_count": overdue_count,
+            "blockers": blockers[:3]  # Top 3 blockers
         })
     
     return {
@@ -691,18 +997,14 @@ async def get_dashboard_overview(user: User = Depends(get_current_user)):
             "total_portfolio": total_portfolio,
             "actual_billed": total_billed,
             "outstanding": outstanding,
+            "collected": total_paid,
             "variance": variance,
             "variance_percent": variance_percent
         },
-        "progress": {
-            "mobilized": total_mobilized,
-            "in_training": total_in_training,
-            "assessed": total_assessed,
-            "placed": total_placed,
-            "placement_percent": round((total_placed / total_mobilized * 100) if total_mobilized > 0 else 0, 1)
-        },
+        "stage_progress": stage_totals,
         "sdc_count": len(sdcs),
-        "sdc_summaries": sdc_summaries
+        "sdc_summaries": sdc_summaries,
+        "work_orders_count": len(work_orders)
     }
 
 # ==================== ALERTS ENDPOINTS ====================
@@ -710,7 +1012,6 @@ async def get_dashboard_overview(user: User = Depends(get_current_user)):
 @api_router.get("/alerts")
 async def get_alerts(user: User = Depends(get_current_user)):
     """Get risk alerts"""
-    # Build query based on role
     query = {"resolved": False}
     if user.role != "ho" and user.assigned_sdc_id:
         query["sdc_id"] = user.assigned_sdc_id
@@ -721,11 +1022,12 @@ async def get_alerts(user: User = Depends(get_current_user)):
 @api_router.post("/alerts/generate")
 async def generate_alerts(user: User = Depends(require_ho_role)):
     """Generate risk alerts based on current data (HO only)"""
-    # Clear old unresolved alerts
     await db.alerts.delete_many({"resolved": False})
     
-    # Get all SDCs
     sdcs = await db.sdcs.find({}, {"_id": 0}).to_list(1000)
+    work_orders = await db.work_orders.find({}, {"_id": 0}).to_list(1000)
+    invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+    roadmaps = await db.training_roadmaps.find({}, {"_id": 0}).to_list(1000)
     
     new_alerts = []
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -734,43 +1036,58 @@ async def generate_alerts(user: User = Depends(require_ho_role)):
         sdc_id = sdc["sdc_id"]
         sdc_name = sdc["name"]
         
-        # Check for overdue batches
-        batches = await db.batches.find({"sdc_id": sdc_id, "status": "active"}, {"_id": 0}).to_list(1000)
-        for batch in batches:
-            if batch.get("end_date") and batch["end_date"] < today:
-                alert = Alert(
-                    sdc_id=sdc_id,
-                    sdc_name=sdc_name,
-                    alert_type="overdue",
-                    message=f"Batch {batch['work_order_number']} is overdue (End: {batch['end_date']})",
-                    severity="high"
-                )
-                alert_dict = alert.model_dump()
-                alert_dict["created_at"] = alert_dict["created_at"].isoformat()
-                new_alerts.append(alert_dict)
+        # Check for overdue work orders
+        sdc_work_orders = [wo for wo in work_orders if wo.get("sdc_id") == sdc_id]
+        for wo in sdc_work_orders:
+            end_date = wo.get("manual_end_date") or wo.get("calculated_end_date")
+            if end_date and end_date < today and wo.get("status") == "active":
+                alert = {
+                    "alert_id": f"alert_{uuid.uuid4().hex[:8]}",
+                    "sdc_id": sdc_id,
+                    "sdc_name": sdc_name,
+                    "work_order_id": wo["work_order_id"],
+                    "alert_type": "overdue",
+                    "message": f"Work Order {wo['work_order_number']} is overdue (End: {end_date})",
+                    "severity": "high",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "resolved": False
+                }
+                new_alerts.append(alert)
         
         # Check for billing variance > 10%
-        job_roles = await db.job_roles.find({"sdc_id": sdc_id}, {"_id": 0}).to_list(1000)
-        invoices = await db.invoices.find({"sdc_id": sdc_id}, {"_id": 0}).to_list(1000)
+        sdc_invoices = [inv for inv in invoices if inv.get("sdc_id") == sdc_id]
+        for inv in sdc_invoices:
+            if abs(inv.get("variance_percent", 0)) > 10:
+                alert = {
+                    "alert_id": f"alert_{uuid.uuid4().hex[:8]}",
+                    "sdc_id": sdc_id,
+                    "sdc_name": sdc_name,
+                    "work_order_id": inv.get("work_order_id"),
+                    "alert_type": "variance",
+                    "message": f"Invoice {inv['invoice_number']} has {inv['variance_percent']}% variance",
+                    "severity": "high" if abs(inv.get("variance_percent", 0)) > 25 else "medium",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "resolved": False
+                }
+                new_alerts.append(alert)
         
-        total_portfolio = sum(jr.get("total_value", 0) for jr in job_roles)
-        total_billed = sum(inv.get("amount", 0) for inv in invoices)
-        
-        if total_portfolio > 0:
-            variance_percent = ((total_portfolio - total_billed) / total_portfolio) * 100
-            if variance_percent > 10:
-                alert = Alert(
-                    sdc_id=sdc_id,
-                    sdc_name=sdc_name,
-                    alert_type="variance",
-                    message=f"Billing variance is {variance_percent:.1f}% (Portfolio: ₹{total_portfolio:,.0f}, Billed: ₹{total_billed:,.0f})",
-                    severity="medium" if variance_percent < 25 else "high"
-                )
-                alert_dict = alert.model_dump()
-                alert_dict["created_at"] = alert_dict["created_at"].isoformat()
-                new_alerts.append(alert_dict)
+        # Check for blockers (stages with notes that are stuck)
+        sdc_roadmaps = [r for r in roadmaps if r.get("sdc_id") == sdc_id]
+        for rm in sdc_roadmaps:
+            if rm.get("notes") and rm.get("status") == "in_progress":
+                alert = {
+                    "alert_id": f"alert_{uuid.uuid4().hex[:8]}",
+                    "sdc_id": sdc_id,
+                    "sdc_name": sdc_name,
+                    "work_order_id": rm.get("work_order_id"),
+                    "alert_type": "blocker",
+                    "message": f"{rm['stage_name']}: {rm['notes']}",
+                    "severity": "medium",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "resolved": False
+                }
+                new_alerts.append(alert)
     
-    # Insert new alerts
     if new_alerts:
         await db.alerts.insert_many(new_alerts)
     
@@ -787,17 +1104,30 @@ async def resolve_alert(alert_id: str, user: User = Depends(require_ho_role)):
 # ==================== UTILITY ENDPOINTS ====================
 
 @api_router.post("/calculate-end-date")
-async def api_calculate_end_date(start_date: str, training_hours: int, user: User = Depends(get_current_user)):
+async def api_calculate_end_date(
+    start_date: str, 
+    training_hours: int, 
+    sessions_per_day: int = 8,
+    sdc_id: Optional[str] = None,
+    user: User = Depends(get_current_user)
+):
     """Calculate training end date"""
-    holidays_docs = await db.holidays.find({}, {"_id": 0}).to_list(1000)
-    holidays = [h["date"] for h in holidays_docs]
-    
-    end_date = calculate_end_date(start_date, training_hours, holidays=holidays)
-    return {"start_date": start_date, "end_date": end_date, "training_hours": training_hours}
+    end_date = await calculate_end_date(start_date, training_hours, sessions_per_day, sdc_id)
+    return {
+        "start_date": start_date, 
+        "end_date": end_date, 
+        "training_hours": training_hours,
+        "sessions_per_day": sessions_per_day
+    }
+
+@api_router.get("/training-stages")
+async def get_training_stages():
+    """Get list of training stages"""
+    return TRAINING_STAGES
 
 @api_router.get("/")
 async def root():
-    return {"message": "SkillFlow CRM API", "version": "1.0.0"}
+    return {"message": "SkillFlow CRM API", "version": "2.0.0"}
 
 # ==================== SEED DATA ENDPOINT ====================
 
@@ -806,76 +1136,154 @@ async def seed_sample_data(user: User = Depends(require_ho_role)):
     """Seed sample data for demo purposes (HO only)"""
     # Clear existing data
     await db.sdcs.delete_many({})
-    await db.job_roles.delete_many({})
-    await db.batches.delete_many({})
+    await db.work_orders.delete_many({})
+    await db.training_roadmaps.delete_many({})
     await db.invoices.delete_many({})
     await db.holidays.delete_many({})
     await db.alerts.delete_many({})
     
-    # Create SDCs
-    sdcs_data = [
-        {"sdc_id": "sdc_gurugram", "name": "SDC Gurugram", "location": "Gurugram, Haryana"},
-        {"sdc_id": "sdc_jaipur", "name": "SDC Jaipur", "location": "Jaipur, Rajasthan"},
-        {"sdc_id": "sdc_delhi", "name": "SDC Delhi", "location": "New Delhi"}
-    ]
-    for sdc in sdcs_data:
-        sdc["created_at"] = datetime.now(timezone.utc).isoformat()
-        sdc["last_updated"] = datetime.now(timezone.utc).isoformat()
-    await db.sdcs.insert_many(sdcs_data)
-    
-    # Create Job Roles
-    job_roles_data = [
-        {"job_role_id": "jr_001", "sdc_id": "sdc_gurugram", "job_role_code": "CSC/Q0801", "job_role_name": "Field Technician Computing", "awarding_body": "NSDC PMKVY", "scheme_name": "PMKVY 4.0", "training_hours": 200, "cost_per_hour": 50, "target_candidates": 50, "total_value": 500000},
-        {"job_role_id": "jr_002", "sdc_id": "sdc_gurugram", "job_role_code": "SSC/Q2212", "job_role_name": "Retail Sales Associate", "awarding_body": "NSDC PMKVY", "scheme_name": "PMKVY 4.0", "training_hours": 150, "cost_per_hour": 45, "target_candidates": 40, "total_value": 270000},
-        {"job_role_id": "jr_003", "sdc_id": "sdc_jaipur", "job_role_code": "ASC/Q1401", "job_role_name": "Domestic Data Entry Operator", "awarding_body": "RSLDC", "scheme_name": "RAJKIVK", "training_hours": 180, "cost_per_hour": 40, "target_candidates": 60, "total_value": 432000},
-        {"job_role_id": "jr_004", "sdc_id": "sdc_jaipur", "job_role_code": "ITC/Q7201", "job_role_name": "Plumber General", "awarding_body": "RSLDC", "scheme_name": "RAJKIVK", "training_hours": 250, "cost_per_hour": 55, "target_candidates": 30, "total_value": 412500},
-        {"job_role_id": "jr_005", "sdc_id": "sdc_delhi", "job_role_code": "TEL/Q2201", "job_role_name": "CRM Domestic Voice", "awarding_body": "State Govt", "scheme_name": "DDUGKY", "training_hours": 300, "cost_per_hour": 60, "target_candidates": 45, "total_value": 810000},
-        {"job_role_id": "jr_006", "sdc_id": "sdc_delhi", "job_role_code": "AMH/Q1947", "job_role_name": "Sewing Machine Operator", "awarding_body": "State Govt", "scheme_name": "DDUGKY", "training_hours": 200, "cost_per_hour": 35, "target_candidates": 55, "total_value": 385000}
-    ]
-    for jr in job_roles_data:
-        jr["created_at"] = datetime.now(timezone.utc).isoformat()
-    await db.job_roles.insert_many(job_roles_data)
-    
-    # Create Batches
-    batches_data = [
-        {"batch_id": "batch_001", "sdc_id": "sdc_gurugram", "job_role_id": "jr_001", "work_order_number": "WO/2025/001", "start_date": "2025-01-15", "end_date": "2025-02-28", "mobilized": 50, "in_training": 35, "assessed": 10, "placed": 5, "status": "active"},
-        {"batch_id": "batch_002", "sdc_id": "sdc_gurugram", "job_role_id": "jr_002", "work_order_number": "WO/2025/002", "start_date": "2025-01-20", "end_date": "2025-03-05", "mobilized": 40, "in_training": 30, "assessed": 5, "placed": 2, "status": "active"},
-        {"batch_id": "batch_003", "sdc_id": "sdc_jaipur", "job_role_id": "jr_003", "work_order_number": "WO/2025/003", "start_date": "2025-01-10", "end_date": "2025-02-20", "mobilized": 60, "in_training": 40, "assessed": 15, "placed": 8, "status": "active"},
-        {"batch_id": "batch_004", "sdc_id": "sdc_jaipur", "job_role_id": "jr_004", "work_order_number": "WO/2025/004", "start_date": "2025-02-01", "end_date": "2025-04-15", "mobilized": 30, "in_training": 25, "assessed": 0, "placed": 0, "status": "active"},
-        {"batch_id": "batch_005", "sdc_id": "sdc_delhi", "job_role_id": "jr_005", "work_order_number": "WO/2025/005", "start_date": "2025-01-05", "end_date": "2025-03-20", "mobilized": 45, "in_training": 38, "assessed": 20, "placed": 12, "status": "active"},
-        {"batch_id": "batch_006", "sdc_id": "sdc_delhi", "job_role_id": "jr_006", "work_order_number": "WO/2025/006", "start_date": "2025-01-25", "end_date": "2025-03-10", "mobilized": 55, "in_training": 45, "assessed": 8, "placed": 3, "status": "active"}
-    ]
-    for batch in batches_data:
-        batch["created_at"] = datetime.now(timezone.utc).isoformat()
-    await db.batches.insert_many(batches_data)
-    
-    # Create Invoices
-    invoices_data = [
-        {"invoice_id": "inv_001", "sdc_id": "sdc_gurugram", "batch_id": "batch_001", "invoice_number": "INV/2025/001", "invoice_date": "2025-01-20", "amount": 200000, "status": "paid", "payment_date": "2025-01-25"},
-        {"invoice_id": "inv_002", "sdc_id": "sdc_gurugram", "batch_id": "batch_001", "invoice_number": "INV/2025/002", "invoice_date": "2025-02-01", "amount": 150000, "status": "pending", "payment_date": None},
-        {"invoice_id": "inv_003", "sdc_id": "sdc_jaipur", "batch_id": "batch_003", "invoice_number": "INV/2025/003", "invoice_date": "2025-01-15", "amount": 180000, "status": "paid", "payment_date": "2025-01-22"},
-        {"invoice_id": "inv_004", "sdc_id": "sdc_jaipur", "batch_id": "batch_003", "invoice_number": "INV/2025/004", "invoice_date": "2025-02-05", "amount": 120000, "status": "pending", "payment_date": None},
-        {"invoice_id": "inv_005", "sdc_id": "sdc_delhi", "batch_id": "batch_005", "invoice_number": "INV/2025/005", "invoice_date": "2025-01-10", "amount": 300000, "status": "paid", "payment_date": "2025-01-18"},
-        {"invoice_id": "inv_006", "sdc_id": "sdc_delhi", "batch_id": "batch_006", "invoice_number": "INV/2025/006", "invoice_date": "2025-02-10", "amount": 100000, "status": "pending", "payment_date": None}
-    ]
-    for inv in invoices_data:
-        inv["created_at"] = datetime.now(timezone.utc).isoformat()
-    await db.invoices.insert_many(invoices_data)
-    
-    # Create Holidays
+    # Create holidays first
     holidays_data = [
-        {"holiday_id": "hol_001", "date": "2025-01-26", "name": "Republic Day", "year": 2025},
-        {"holiday_id": "hol_002", "date": "2025-03-14", "name": "Holi", "year": 2025},
-        {"holiday_id": "hol_003", "date": "2025-08-15", "name": "Independence Day", "year": 2025},
-        {"holiday_id": "hol_004", "date": "2025-10-02", "name": "Gandhi Jayanti", "year": 2025},
-        {"holiday_id": "hol_005", "date": "2025-10-20", "name": "Dussehra", "year": 2025},
-        {"holiday_id": "hol_006", "date": "2025-11-01", "name": "Diwali", "year": 2025}
+        {"holiday_id": "hol_001", "date": "2025-01-26", "name": "Republic Day", "year": 2025, "is_local": False},
+        {"holiday_id": "hol_002", "date": "2025-03-14", "name": "Holi", "year": 2025, "is_local": False},
+        {"holiday_id": "hol_003", "date": "2025-08-15", "name": "Independence Day", "year": 2025, "is_local": False},
+        {"holiday_id": "hol_004", "date": "2025-10-02", "name": "Gandhi Jayanti", "year": 2025, "is_local": False},
+        {"holiday_id": "hol_005", "date": "2025-10-20", "name": "Dussehra", "year": 2025, "is_local": False},
+        {"holiday_id": "hol_006", "date": "2025-11-01", "name": "Diwali", "year": 2025, "is_local": False}
     ]
     for hol in holidays_data:
         hol["created_at"] = datetime.now(timezone.utc).isoformat()
     await db.holidays.insert_many(holidays_data)
     
-    return {"message": "Sample data seeded successfully", "sdcs": 3, "job_roles": 6, "batches": 6, "invoices": 6, "holidays": 6}
+    # Create Work Orders (which auto-creates SDCs and roadmaps)
+    work_orders_data = [
+        {
+            "work_order_number": "WO/2025/001",
+            "location": "Gurugram",
+            "job_role_code": "CSC/Q0801",
+            "job_role_name": "Field Technician Computing",
+            "awarding_body": "NSDC PMKVY",
+            "scheme_name": "PMKVY 4.0",
+            "total_training_hours": 200,
+            "sessions_per_day": 8,
+            "num_students": 50,
+            "cost_per_student": 10000,
+            "manager_email": "gurugram.manager@skillflow.com"
+        },
+        {
+            "work_order_number": "WO/2025/002",
+            "location": "Jaipur",
+            "job_role_code": "ASC/Q1401",
+            "job_role_name": "Domestic Data Entry Operator",
+            "awarding_body": "RSLDC",
+            "scheme_name": "RAJKIVK",
+            "total_training_hours": 180,
+            "sessions_per_day": 8,
+            "num_students": 60,
+            "cost_per_student": 7200,
+            "manager_email": "jaipur.manager@skillflow.com"
+        },
+        {
+            "work_order_number": "WO/2025/003",
+            "location": "Delhi",
+            "job_role_code": "TEL/Q2201",
+            "job_role_name": "CRM Domestic Voice",
+            "awarding_body": "State Govt",
+            "scheme_name": "DDUGKY",
+            "total_training_hours": 300,
+            "sessions_per_day": 8,
+            "num_students": 45,
+            "cost_per_student": 18000,
+            "manager_email": "delhi.manager@skillflow.com"
+        }
+    ]
+    
+    created_sdcs = set()
+    for wo_data in work_orders_data:
+        # Create SDC
+        sdc = await get_or_create_sdc(wo_data["location"], wo_data["manager_email"])
+        created_sdcs.add(sdc["sdc_id"])
+        
+        # Calculate contract value
+        total_contract_value = wo_data["num_students"] * wo_data["cost_per_student"]
+        
+        # Create Work Order
+        work_order = {
+            "work_order_id": f"wo_{uuid.uuid4().hex[:8]}",
+            "work_order_number": wo_data["work_order_number"],
+            "sdc_id": sdc["sdc_id"],
+            "location": wo_data["location"],
+            "job_role_code": wo_data["job_role_code"],
+            "job_role_name": wo_data["job_role_name"],
+            "awarding_body": wo_data["awarding_body"],
+            "scheme_name": wo_data["scheme_name"],
+            "total_training_hours": wo_data["total_training_hours"],
+            "sessions_per_day": wo_data["sessions_per_day"],
+            "num_students": wo_data["num_students"],
+            "cost_per_student": wo_data["cost_per_student"],
+            "total_contract_value": total_contract_value,
+            "manager_email": wo_data["manager_email"],
+            "start_date": "2025-01-15",
+            "calculated_end_date": await calculate_end_date("2025-01-15", wo_data["total_training_hours"], wo_data["sessions_per_day"], sdc["sdc_id"]),
+            "manual_end_date": None,
+            "status": "active",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_by": user.user_id
+        }
+        
+        await db.work_orders.insert_one(work_order)
+        
+        # Create roadmap with some progress
+        for i, stage in enumerate(TRAINING_STAGES):
+            progress = wo_data["num_students"] if i < 2 else (wo_data["num_students"] * (0.8 - i * 0.1) if i < 5 else wo_data["num_students"] * 0.2)
+            status = "completed" if i < 2 else ("in_progress" if i == 2 else "pending")
+            
+            roadmap = {
+                "roadmap_id": f"rm_{uuid.uuid4().hex[:8]}",
+                "work_order_id": work_order["work_order_id"],
+                "sdc_id": sdc["sdc_id"],
+                "stage_id": stage["stage_id"],
+                "stage_name": stage["name"],
+                "stage_order": stage["order"],
+                "target_count": wo_data["num_students"],
+                "completed_count": int(progress),
+                "status": status,
+                "start_date": "2025-01-15" if i < 3 else None,
+                "end_date": None,
+                "notes": "Waiting for attendance upload" if i == 2 and wo_data["location"] == "Jaipur" else None,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.training_roadmaps.insert_one(roadmap)
+        
+        # Create invoice
+        billing_value = total_contract_value * 0.7  # 70% billed
+        payment_received = billing_value * 0.6  # 60% of billed received
+        
+        invoice = {
+            "invoice_id": f"inv_{uuid.uuid4().hex[:8]}",
+            "sdc_id": sdc["sdc_id"],
+            "work_order_id": work_order["work_order_id"],
+            "invoice_number": f"INV/{wo_data['work_order_number'].split('/')[-1]}",
+            "invoice_date": "2025-02-01",
+            "order_value": total_contract_value,
+            "billing_value": billing_value,
+            "variance": total_contract_value - billing_value,
+            "variance_percent": round(((total_contract_value - billing_value) / total_contract_value * 100), 1),
+            "payment_received": payment_received,
+            "outstanding": billing_value - payment_received,
+            "status": "partial",
+            "payment_date": "2025-02-15",
+            "notes": None,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.invoices.insert_one(invoice)
+    
+    return {
+        "message": "Sample data seeded successfully",
+        "sdcs": len(created_sdcs),
+        "work_orders": len(work_orders_data),
+        "holidays": len(holidays_data)
+    }
 
 # Include the router in the main app
 app.include_router(api_router)
