@@ -54,6 +54,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Settings({ user }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [sdcs, setSdcs] = useState([]);
   const [holidays, setHolidays] = useState([]);
@@ -61,15 +62,34 @@ export default function Settings({ user }) {
   const [showHolidayDialog, setShowHolidayDialog] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [generatingAlerts, setGeneratingAlerts] = useState(false);
+  
+  // Gmail state
+  const [gmailStatus, setGmailStatus] = useState({ connected: false });
+  const [connectingGmail, setConnectingGmail] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [emailLogs, setEmailLogs] = useState([]);
 
   const fetchData = async () => {
     try {
-      const [sdcsRes, holidaysRes] = await Promise.all([
+      const promises = [
         axios.get(`${API}/sdcs`),
         axios.get(`${API}/holidays`)
-      ]);
-      setSdcs(sdcsRes.data);
-      setHolidays(holidaysRes.data);
+      ];
+      
+      // Fetch Gmail status if HO
+      if (user?.role === "ho") {
+        promises.push(axios.get(`${API}/gmail/status`).catch(() => ({ data: { connected: false } })));
+        promises.push(axios.get(`${API}/email-logs`).catch(() => ({ data: [] })));
+      }
+      
+      const results = await Promise.all(promises);
+      setSdcs(results[0].data);
+      setHolidays(results[1].data);
+      
+      if (user?.role === "ho") {
+        setGmailStatus(results[2].data);
+        setEmailLogs(results[3].data || []);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Failed to load settings data");
@@ -80,7 +100,29 @@ export default function Settings({ user }) {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    
+    // Check for Gmail connection status from URL params
+    const gmailParam = searchParams.get("gmail");
+    if (gmailParam === "connected") {
+      toast.success("Gmail connected successfully!");
+      setGmailStatus({ connected: true });
+    } else if (gmailParam === "error") {
+      toast.error("Failed to connect Gmail. Please try again.");
+    }
+  }, [searchParams]);
+
+  const handleConnectGmail = async () => {
+    setConnectingGmail(true);
+    try {
+      const response = await axios.get(`${API}/gmail/auth`);
+      // Redirect to Google OAuth
+      window.location.href = response.data.authorization_url;
+    } catch (error) {
+      console.error("Error starting Gmail auth:", error);
+      toast.error("Failed to start Gmail authorization");
+      setConnectingGmail(false);
+    }
+  };
 
   const handleSeedData = async () => {
     if (user?.role !== "ho") {
