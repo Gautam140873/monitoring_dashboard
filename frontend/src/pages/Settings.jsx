@@ -696,6 +696,67 @@ const AddHolidayForm = ({ onSuccess }) => {
   );
 };
 
+// Send Risk Summary Form
+const SendRiskSummaryForm = ({ onSuccess }) => {
+  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await axios.post(`${API}/gmail/send-risk-summary`, { email });
+      toast.success(`Risk Summary sent to ${email}`);
+      onSuccess();
+    } catch (error) {
+      console.error("Error sending email:", error);
+      const errorMsg = error.response?.data?.detail || "Failed to send email";
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Send Risk Summary Email</DialogTitle>
+        <DialogDescription>
+          Send a Risk Summary report with current alerts and financial health metrics.
+        </DialogDescription>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <div>
+          <Label>Recipient Email</Label>
+          <Input 
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="ho.lead@company.com"
+            required
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Enter the Head Office lead's email address
+          </p>
+        </div>
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? (
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Sending...
+            </>
+          ) : (
+            <>
+              <Send className="w-4 h-4 mr-2" />
+              Send Risk Summary
+            </>
+          )}
+        </Button>
+      </form>
+    </>
+  );
+};
+
 const SettingsSkeleton = () => (
   <div className="min-h-screen bg-background">
     <header className="border-b border-border">
