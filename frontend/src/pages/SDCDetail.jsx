@@ -17,7 +17,10 @@ import {
   ClipboardList,
   Briefcase,
   GraduationCap,
-  CheckCircle2
+  CheckCircle2,
+  Download,
+  Save,
+  Edit2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +52,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Stage icons mapping
 const STAGE_ICONS = {
@@ -81,6 +90,7 @@ export default function SDCDetail({ user }) {
   const [showWorkOrderDialog, setShowWorkOrderDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showStartDateDialog, setShowStartDateDialog] = useState(false);
+  const [showProgressDialog, setShowProgressDialog] = useState(false);
   const [selectedWorkOrder, setSelectedWorkOrder] = useState(null);
 
   const fetchSDCData = async () => {
@@ -108,6 +118,25 @@ export default function SDCDetail({ user }) {
       currency: 'INR',
       maximumFractionDigits: 0
     }).format(value);
+  };
+
+  const handleExport = async (type) => {
+    try {
+      const response = await axios.get(`${API}/export/${type}?sdc_id=${sdcId}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${type}_${sdcId}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success(`${type.replace('-', ' ')} exported successfully`);
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export data");
+    }
   };
 
   if (loading) {
@@ -146,6 +175,27 @@ export default function SDCDetail({ user }) {
           </div>
           
           <div className="flex items-center gap-2">
+            {/* Export Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" data-testid="export-btn">
+                  <Download className="w-4 h-4 mr-1" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport('work-orders')}>
+                  Work Orders (CSV)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('training-progress')}>
+                  Training Progress (CSV)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('invoices')}>
+                  Invoices (CSV)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {user?.role === "ho" && (
               <Dialog open={showWorkOrderDialog} onOpenChange={setShowWorkOrderDialog}>
                 <DialogTrigger asChild>
@@ -211,8 +261,28 @@ export default function SDCDetail({ user }) {
 
         {/* Training Roadmap Progress */}
         <Card className="mb-8 border border-border animate-fade-in" data-testid="roadmap-card">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="font-heading font-bold">Training Roadmap</CardTitle>
+            {work_orders && work_orders.length > 0 && (
+              <Dialog open={showProgressDialog} onOpenChange={setShowProgressDialog}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="update-progress-btn">
+                    <Edit2 className="w-4 h-4 mr-1" />
+                    Update Progress
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                  <BatchProgressForm 
+                    sdcId={sdcId}
+                    workOrders={work_orders}
+                    onSuccess={() => {
+                      setShowProgressDialog(false);
+                      fetchSDCData();
+                    }} 
+                  />
+                </DialogContent>
+              </Dialog>
+            )}
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
@@ -412,6 +482,149 @@ export default function SDCDetail({ user }) {
     </div>
   );
 }
+
+// Batch Progress Update Form
+const BatchProgressForm = ({ sdcId, workOrders, onSuccess }) => {
+  const [loading, setLoading] = useState(false);
+  const [roadmaps, setRoadmaps] = useState([]);
+  const [updates, setUpdates] = useState({});
+
+  useEffect(() => {
+    const fetchRoadmaps = async () => {
+      try {
+        const allRoadmaps = [];
+        for (const wo of workOrders) {
+          const response = await axios.get(`${API}/roadmap/${wo.work_order_id}`);
+          allRoadmaps.push(...response.data.map(rm => ({
+            ...rm,
+            work_order_number: wo.work_order_number
+          })));
+        }
+        setRoadmaps(allRoadmaps);
+      } catch (error) {
+        console.error("Error fetching roadmaps:", error);
+        toast.error("Failed to load roadmap data");
+      }
+    };
+    fetchRoadmaps();
+  }, [workOrders]);
+
+  const handleUpdateChange = (roadmapId, field, value) => {
+    setUpdates(prev => ({
+      ...prev,
+      [roadmapId]: {
+        ...prev[roadmapId],
+        roadmap_id: roadmapId,
+        [field]: value
+      }
+    }));
+  };
+
+  const handleSubmit = async () => {
+    const updatesList = Object.values(updates).filter(u => 
+      u.completed_count !== undefined || u.status !== undefined || u.notes !== undefined
+    );
+    
+    if (updatesList.length === 0) {
+      toast.error("No changes to save");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await axios.put(`${API}/roadmap/batch-update`, { updates: updatesList });
+      toast.success(`Updated ${updatesList.length} stages`);
+      onSuccess();
+    } catch (error) {
+      console.error("Error updating roadmaps:", error);
+      toast.error("Failed to update progress");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Group roadmaps by work order
+  const groupedRoadmaps = roadmaps.reduce((acc, rm) => {
+    const woNum = rm.work_order_number;
+    if (!acc[woNum]) acc[woNum] = [];
+    acc[woNum].push(rm);
+    return acc;
+  }, {});
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Update Training Progress</DialogTitle>
+      </DialogHeader>
+      <div className="mt-4 space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+        {Object.entries(groupedRoadmaps).map(([woNum, stages]) => (
+          <div key={woNum} className="border border-border rounded-md p-4">
+            <h3 className="font-heading font-bold mb-4">{woNum}</h3>
+            <div className="space-y-3">
+              {stages.sort((a, b) => a.stage_order - b.stage_order).map(rm => (
+                <div key={rm.roadmap_id} className="grid grid-cols-4 gap-3 items-center">
+                  <div className="text-sm font-medium">{rm.stage_name}</div>
+                  <div>
+                    <Input
+                      type="number"
+                      min="0"
+                      max={rm.target_count}
+                      placeholder={`${rm.completed_count}/${rm.target_count}`}
+                      defaultValue={rm.completed_count}
+                      onChange={(e) => handleUpdateChange(rm.roadmap_id, 'completed_count', parseInt(e.target.value) || 0)}
+                      className="h-8"
+                    />
+                  </div>
+                  <div>
+                    <Select 
+                      defaultValue={rm.status}
+                      onValueChange={(v) => handleUpdateChange(rm.roadmap_id, 'status', v)}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="paid">Paid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Input
+                      placeholder="Notes..."
+                      defaultValue={rm.notes || ''}
+                      onChange={(e) => handleUpdateChange(rm.roadmap_id, 'notes', e.target.value)}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        
+        {roadmaps.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground">
+            No roadmap stages found
+          </div>
+        )}
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="outline" onClick={onSuccess}>Cancel</Button>
+        <Button onClick={handleSubmit} disabled={loading}>
+          {loading ? "Saving..." : (
+            <>
+              <Save className="w-4 h-4 mr-1" />
+              Save Changes
+            </>
+          )}
+        </Button>
+      </div>
+    </>
+  );
+};
 
 // Add Work Order Form
 const AddWorkOrderForm = ({ location, onSuccess }) => {
