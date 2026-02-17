@@ -90,6 +90,25 @@ export default function FinancialControl({ user }) {
     }
   };
 
+  const handleExport = async (type) => {
+    try {
+      const response = await axios.get(`${API}/export/${type}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${type}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success(`${type.replace('-', ' ')} exported successfully`);
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export data");
+    }
+  };
+
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
