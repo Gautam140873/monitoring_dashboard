@@ -439,6 +439,95 @@ export default function Settings({ user }) {
                       </Button>
                     </CardContent>
                   </Card>
+
+                  {/* Gmail Integration */}
+                  <Card className="border border-border">
+                    <CardHeader>
+                      <CardTitle className="font-heading flex items-center gap-2">
+                        <Mail className="w-5 h-5" />
+                        Email Notifications (Gmail)
+                      </CardTitle>
+                      <CardDescription>
+                        Connect Gmail to send Risk Summary emails to Head Office leads.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-muted rounded-md">
+                        <div className="flex items-center gap-3">
+                          {gmailStatus.connected ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                          ) : (
+                            <Mail className="w-5 h-5 text-muted-foreground" />
+                          )}
+                          <div>
+                            <div className="font-medium">
+                              {gmailStatus.connected ? "Gmail Connected" : "Gmail Not Connected"}
+                            </div>
+                            {gmailStatus.connected && gmailStatus.updated_at && (
+                              <div className="text-xs text-muted-foreground">
+                                Connected on {new Date(gmailStatus.updated_at).toLocaleDateString()}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {!gmailStatus.connected && (
+                          <Button onClick={handleConnectGmail} disabled={connectingGmail}>
+                            {connectingGmail ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                Connecting...
+                              </>
+                            ) : (
+                              <>
+                                <ExternalLink className="w-4 h-4 mr-2" />
+                                Connect Gmail
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+
+                      {gmailStatus.connected && (
+                        <>
+                          <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+                            <DialogTrigger asChild>
+                              <Button data-testid="send-risk-summary-btn">
+                                <Send className="w-4 h-4 mr-2" />
+                                Send Risk Summary
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <SendRiskSummaryForm 
+                                onSuccess={() => {
+                                  setShowEmailDialog(false);
+                                  fetchData();
+                                }} 
+                              />
+                            </DialogContent>
+                          </Dialog>
+
+                          {emailLogs.length > 0 && (
+                            <div className="mt-4">
+                              <h4 className="font-medium mb-2">Recent Emails</h4>
+                              <div className="space-y-2">
+                                {emailLogs.slice(0, 5).map((log, i) => (
+                                  <div key={i} className="flex items-center justify-between text-sm p-2 border border-border rounded">
+                                    <div>
+                                      <span className="font-mono">{log.recipient}</span>
+                                      <span className="text-muted-foreground ml-2">({log.alerts_count} alerts)</span>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">
+                                      {new Date(log.sent_at).toLocaleString()}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
                 </>
               )}
 
