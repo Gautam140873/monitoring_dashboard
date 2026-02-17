@@ -885,6 +885,335 @@ async def export_invoices(sdc_id: Optional[str] = None, user: User = Depends(get
         headers={"Content-Disposition": "attachment; filename=invoices.csv"}
     )
 
+# ==================== GMAIL API INTEGRATION ====================
+
+def get_gmail_flow(redirect_uri: str):
+    """Create OAuth flow for Gmail"""
+    client_config = {
+        "web": {
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [redirect_uri]
+        }
+    }
+    flow = Flow.from_client_config(client_config, scopes=GMAIL_SCOPES)
+    flow.redirect_uri = redirect_uri
+    return flow
+
+@api_router.get("/gmail/auth")
+async def gmail_auth_start(request: Request, user: User = Depends(require_ho_role)):
+    """Start Gmail OAuth flow (HO only)"""
+    # Get the frontend URL for redirect
+    frontend_url = request.headers.get("origin", "https://sdc-manager.preview.emergentagent.com")
+    redirect_uri = f"{frontend_url}/api/gmail/callback"
+    
+    # Use backend URL for callback
+    backend_url = str(request.base_url).rstrip("/")
+    redirect_uri = f"{backend_url}api/gmail/callback"
+    
+    flow = get_gmail_flow(redirect_uri)
+    authorization_url, state = flow.authorization_url(
+        access_type='offline',
+        include_granted_scopes='true',
+        prompt='consent'
+    )
+    
+    # Store state in DB for verification
+    await db.oauth_states.insert_one({
+        "state": state,
+        "user_id": user.user_id,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"authorization_url": authorization_url, "state": state}
+
+@api_router.get("/gmail/callback")
+async def gmail_callback(code: str, state: str, request: Request):
+    """Handle Gmail OAuth callback"""
+    # Verify state
+    state_doc = await db.oauth_states.find_one({"state": state})
+    if not state_doc:
+        raise HTTPException(status_code=400, detail="Invalid state")
+    
+    user_id = state_doc["user_id"]
+    await db.oauth_states.delete_one({"state": state})
+    
+    # Get the redirect URI
+    backend_url = str(request.base_url).rstrip("/")
+    redirect_uri = f"{backend_url}api/gmail/callback"
+    
+    try:
+        flow = get_gmail_flow(redirect_uri)
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+        
+        # Store credentials in DB
+        creds_data = {
+            "user_id": user_id,
+            "token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": list(credentials.scopes),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.gmail_credentials.update_one(
+            {"user_id": user_id},
+            {"$set": creds_data},
+            upsert=True
+        )
+        
+        # Redirect to settings page
+        frontend_url = os.environ.get("FRONTEND_URL", "https://sdc-manager.preview.emergentagent.com")
+        return RedirectResponse(url=f"{frontend_url}/settings?gmail=connected")
+        
+    except Exception as e:
+        logger.error(f"Gmail OAuth error: {e}")
+        frontend_url = os.environ.get("FRONTEND_URL", "https://sdc-manager.preview.emergentagent.com")
+        return RedirectResponse(url=f"{frontend_url}/settings?gmail=error")
+
+@api_router.get("/gmail/status")
+async def gmail_status(user: User = Depends(require_ho_role)):
+    """Check Gmail connection status"""
+    creds = await db.gmail_credentials.find_one({"user_id": user.user_id}, {"_id": 0})
+    if creds and creds.get("token"):
+        return {"connected": True, "updated_at": creds.get("updated_at")}
+    return {"connected": False}
+
+async def get_gmail_service(user_id: str):
+    """Get Gmail service for sending emails"""
+    creds_doc = await db.gmail_credentials.find_one({"user_id": user_id}, {"_id": 0})
+    if not creds_doc:
+        return None
+    
+    credentials = Credentials(
+        token=creds_doc["token"],
+        refresh_token=creds_doc.get("refresh_token"),
+        token_uri=creds_doc["token_uri"],
+        client_id=creds_doc["client_id"],
+        client_secret=creds_doc["client_secret"],
+        scopes=creds_doc["scopes"]
+    )
+    
+    # Refresh if expired
+    if credentials.expired and credentials.refresh_token:
+        from google.auth.transport.requests import Request as GoogleRequest
+        credentials.refresh(GoogleRequest())
+        
+        # Update stored credentials
+        await db.gmail_credentials.update_one(
+            {"user_id": user_id},
+            {"$set": {"token": credentials.token, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    
+    return build('gmail', 'v1', credentials=credentials)
+
+def create_risk_summary_email(alerts: List[dict], dashboard_data: dict, recipient_email: str) -> MIMEMultipart:
+    """Create HTML email for Risk Summary"""
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = f"🚨 SkillFlow Risk Summary - {datetime.now().strftime('%d %b %Y')}"
+    msg['To'] = recipient_email
+    
+    # Get commercial health data
+    health = dashboard_data.get("commercial_health", {})
+    
+    # Build alerts HTML
+    alerts_html = ""
+    for alert in alerts:
+        severity_color = "#dc2626" if alert["severity"] == "high" else "#f59e0b"
+        alerts_html += f"""
+        <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+                <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; 
+                    background-color: {severity_color}20; color: {severity_color}; font-weight: 600;">
+                    {alert['severity'].upper()}
+                </span>
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">{alert['sdc_name']}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{alert['alert_type'].title()}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{alert['message']}</td>
+        </tr>
+        """
+    
+    # Format currency
+    def fmt_currency(val):
+        return f"₹{val:,.0f}"
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #1f2937; }}
+            .container {{ max-width: 800px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: #1e293b; color: white; padding: 24px; border-radius: 8px 8px 0 0; }}
+            .content {{ background: #ffffff; padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; }}
+            .metric-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 20px 0; }}
+            .metric {{ background: #f8fafc; padding: 16px; border-radius: 8px; text-align: center; }}
+            .metric-value {{ font-size: 24px; font-weight: 700; color: #1e293b; }}
+            .metric-label {{ font-size: 12px; color: #64748b; margin-top: 4px; }}
+            .alert-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+            .alert-table th {{ background: #f1f5f9; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; }}
+            .footer {{ margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #64748b; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1 style="margin: 0; font-size: 24px;">🚨 Risk Summary Report</h1>
+                <p style="margin: 8px 0 0 0; opacity: 0.8;">SkillFlow CRM - {datetime.now().strftime('%d %B %Y, %I:%M %p')}</p>
+            </div>
+            <div class="content">
+                <h2 style="margin-top: 0;">Commercial Health Overview</h2>
+                <div class="metric-grid">
+                    <div class="metric">
+                        <div class="metric-value">{fmt_currency(health.get('total_portfolio', 0))}</div>
+                        <div class="metric-label">Total Portfolio</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">{fmt_currency(health.get('actual_billed', 0))}</div>
+                        <div class="metric-label">Actual Billed</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" style="color: #10b981;">{fmt_currency(health.get('collected', 0))}</div>
+                        <div class="metric-label">Collected</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" style="color: #dc2626;">{fmt_currency(health.get('outstanding', 0))}</div>
+                        <div class="metric-label">Outstanding</div>
+                    </div>
+                </div>
+                
+                <h2>Active Alerts ({len(alerts)})</h2>
+                {'<p style="color: #64748b;">No active alerts at this time.</p>' if not alerts else f'''
+                <table class="alert-table">
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>SDC</th>
+                            <th>Type</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {alerts_html}
+                    </tbody>
+                </table>
+                '''}
+                
+                <div class="footer">
+                    <p>This is an automated report from SkillFlow CRM. <a href="https://sdc-manager.preview.emergentagent.com/dashboard">View Dashboard</a></p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    # Plain text version
+    plain_text = f"""
+    SkillFlow Risk Summary Report - {datetime.now().strftime('%d %B %Y')}
+    
+    COMMERCIAL HEALTH
+    - Total Portfolio: {fmt_currency(health.get('total_portfolio', 0))}
+    - Actual Billed: {fmt_currency(health.get('actual_billed', 0))}
+    - Collected: {fmt_currency(health.get('collected', 0))}
+    - Outstanding: {fmt_currency(health.get('outstanding', 0))}
+    
+    ACTIVE ALERTS ({len(alerts)})
+    """ + "\n".join([f"- [{a['severity'].upper()}] {a['sdc_name']}: {a['message']}" for a in alerts])
+    
+    msg.attach(MIMEText(plain_text, 'plain'))
+    msg.attach(MIMEText(html, 'html'))
+    
+    return msg
+
+class EmailRecipient(BaseModel):
+    email: str
+
+@api_router.post("/gmail/send-risk-summary")
+async def send_risk_summary_email(recipient: EmailRecipient, user: User = Depends(require_ho_role)):
+    """Send Risk Summary email to specified recipient (HO only)"""
+    # Get Gmail service
+    service = await get_gmail_service(user.user_id)
+    if not service:
+        raise HTTPException(status_code=400, detail="Gmail not connected. Please authorize Gmail access first.")
+    
+    # Get alerts and dashboard data
+    alerts = await db.alerts.find({"resolved": False}, {"_id": 0}).to_list(1000)
+    
+    # Get dashboard overview
+    sdcs = await db.sdcs.find({}, {"_id": 0}).to_list(1000)
+    work_orders = await db.work_orders.find({}, {"_id": 0}).to_list(1000)
+    invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+    
+    total_portfolio = sum(wo.get("total_contract_value", 0) for wo in work_orders)
+    total_billed = sum(inv.get("billing_value", 0) for inv in invoices)
+    total_paid = sum(inv.get("payment_received", 0) for inv in invoices)
+    outstanding = sum(inv.get("outstanding", 0) for inv in invoices)
+    
+    dashboard_data = {
+        "commercial_health": {
+            "total_portfolio": total_portfolio,
+            "actual_billed": total_billed,
+            "collected": total_paid,
+            "outstanding": outstanding,
+            "variance": total_portfolio - total_billed
+        }
+    }
+    
+    # Create email
+    message = create_risk_summary_email(alerts, dashboard_data, recipient.email)
+    
+    try:
+        # Get sender's email
+        profile = service.users().getProfile(userId='me').execute()
+        sender_email = profile['emailAddress']
+        message['From'] = sender_email
+        
+        # Encode and send
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        send_result = service.users().messages().send(
+            userId='me',
+            body={'raw': raw}
+        ).execute()
+        
+        logger.info(f"Risk summary email sent to {recipient.email}, message ID: {send_result['id']}")
+        
+        # Log the email
+        await db.email_logs.insert_one({
+            "email_id": send_result['id'],
+            "recipient": recipient.email,
+            "sender": sender_email,
+            "subject": message['Subject'],
+            "type": "risk_summary",
+            "alerts_count": len(alerts),
+            "sent_by": user.user_id,
+            "sent_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        return {
+            "message": "Risk summary email sent successfully",
+            "email_id": send_result['id'],
+            "recipient": recipient.email,
+            "alerts_count": len(alerts)
+        }
+        
+    except HttpError as e:
+        logger.error(f"Gmail API error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+@api_router.get("/email-logs")
+async def get_email_logs(user: User = Depends(require_ho_role)):
+    """Get email sending history (HO only)"""
+    logs = await db.email_logs.find({}, {"_id": 0}).sort("sent_at", -1).to_list(100)
+    return logs
+
 # ==================== SDC ENDPOINTS ====================
 
 @api_router.get("/sdcs")
