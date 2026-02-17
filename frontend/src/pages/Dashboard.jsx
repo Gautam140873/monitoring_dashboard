@@ -510,3 +510,201 @@ const DashboardSkeleton = () => (
     </main>
   </div>
 );
+
+// New Work Order Form Component
+const NewWorkOrderForm = ({ onSuccess }) => {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    work_order_number: "",
+    location: "",
+    job_role_code: "",
+    job_role_name: "",
+    awarding_body: "",
+    scheme_name: "",
+    total_training_hours: 200,
+    sessions_per_day: 8,
+    num_students: 30,
+    cost_per_student: 10000,
+    manager_email: ""
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await axios.post(`${API}/work-orders`, {
+        ...formData,
+        total_training_hours: parseInt(formData.total_training_hours),
+        sessions_per_day: parseInt(formData.sessions_per_day),
+        num_students: parseInt(formData.num_students),
+        cost_per_student: parseFloat(formData.cost_per_student)
+      });
+      toast.success("Work Order created successfully! SDC has been automatically created/linked.");
+      onSuccess();
+    } catch (error) {
+      console.error("Error creating work order:", error);
+      toast.error(error.response?.data?.detail || "Failed to create work order");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalValue = formData.num_students * formData.cost_per_student;
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-xl font-heading">Create New Work Order</DialogTitle>
+        <p className="text-sm text-muted-foreground mt-1">
+          This will automatically create a new SDC if the location doesn't exist.
+        </p>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-4 mt-4" data-testid="new-work-order-form">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Work Order Number *</Label>
+            <Input 
+              value={formData.work_order_number}
+              onChange={(e) => setFormData({ ...formData, work_order_number: e.target.value })}
+              placeholder="WO/2025/001"
+              required
+              data-testid="input-wo-number"
+            />
+          </div>
+          <div>
+            <Label>Location (SDC) *</Label>
+            <Input 
+              value={formData.location}
+              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              placeholder="e.g., Mumbai, Delhi, Jaipur"
+              required
+              data-testid="input-location"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Enter city name - SDC will be auto-created</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Job Role Code *</Label>
+            <Input 
+              value={formData.job_role_code}
+              onChange={(e) => setFormData({ ...formData, job_role_code: e.target.value })}
+              placeholder="CSC/Q0801"
+              required
+              data-testid="input-job-code"
+            />
+          </div>
+          <div>
+            <Label>Job Role Name *</Label>
+            <Input 
+              value={formData.job_role_name}
+              onChange={(e) => setFormData({ ...formData, job_role_name: e.target.value })}
+              placeholder="Field Technician Computing"
+              required
+              data-testid="input-job-name"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Awarding Body *</Label>
+            <Input 
+              value={formData.awarding_body}
+              onChange={(e) => setFormData({ ...formData, awarding_body: e.target.value })}
+              placeholder="NSDC PMKVY"
+              required
+              data-testid="input-awarding-body"
+            />
+          </div>
+          <div>
+            <Label>Scheme Name *</Label>
+            <Input 
+              value={formData.scheme_name}
+              onChange={(e) => setFormData({ ...formData, scheme_name: e.target.value })}
+              placeholder="PMKVY 4.0"
+              required
+              data-testid="input-scheme"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Total Training Hours *</Label>
+            <Input 
+              type="number"
+              value={formData.total_training_hours}
+              onChange={(e) => setFormData({ ...formData, total_training_hours: e.target.value })}
+              min="1"
+              required
+              data-testid="input-training-hours"
+            />
+          </div>
+          <div>
+            <Label>Sessions/Day (hrs)</Label>
+            <Input 
+              type="number"
+              value={formData.sessions_per_day}
+              onChange={(e) => setFormData({ ...formData, sessions_per_day: e.target.value })}
+              min="1"
+              max="12"
+              data-testid="input-sessions-day"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Number of Students *</Label>
+            <Input 
+              type="number"
+              value={formData.num_students}
+              onChange={(e) => setFormData({ ...formData, num_students: e.target.value })}
+              min="1"
+              required
+              data-testid="input-students"
+            />
+          </div>
+          <div>
+            <Label>Cost per Student (₹) *</Label>
+            <Input 
+              type="number"
+              value={formData.cost_per_student}
+              onChange={(e) => setFormData({ ...formData, cost_per_student: e.target.value })}
+              min="0"
+              required
+              data-testid="input-cost"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label>Local Manager Email (Optional)</Label>
+          <Input 
+            type="email"
+            value={formData.manager_email}
+            onChange={(e) => setFormData({ ...formData, manager_email: e.target.value })}
+            placeholder="manager@example.com"
+            data-testid="input-manager-email"
+          />
+        </div>
+
+        <div className="p-4 bg-muted rounded-md">
+          <div className="text-sm text-muted-foreground">Total Contract Value</div>
+          <div className="font-mono font-bold text-2xl text-primary">
+            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(totalValue)}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {formData.num_students} students × ₹{Number(formData.cost_per_student).toLocaleString('en-IN')} per student
+          </p>
+        </div>
+
+        <Button type="submit" className="w-full" disabled={loading} data-testid="submit-work-order">
+          {loading ? "Creating..." : "Create Work Order & SDC"}
+        </Button>
+      </form>
+    </>
+  );
+};
