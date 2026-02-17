@@ -642,6 +642,235 @@ async def update_roadmap_stage(
     
     return {"message": "Roadmap stage updated"}
 
+class BatchProgressUpdate(BaseModel):
+    """Batch update for multiple roadmap stages"""
+    updates: List[dict]  # [{"roadmap_id": "...", "completed_count": 10, "status": "in_progress"}]
+
+@api_router.put("/roadmap/batch-update")
+async def batch_update_roadmap(
+    batch_data: BatchProgressUpdate,
+    user: User = Depends(get_current_user)
+):
+    """Batch update multiple roadmap stages at once"""
+    updated_count = 0
+    errors = []
+    
+    for update in batch_data.updates:
+        roadmap_id = update.get("roadmap_id")
+        if not roadmap_id:
+            continue
+            
+        roadmap = await db.training_roadmaps.find_one({"roadmap_id": roadmap_id}, {"_id": 0})
+        if not roadmap:
+            errors.append(f"Roadmap {roadmap_id} not found")
+            continue
+        
+        if user.role != "ho" and user.assigned_sdc_id != roadmap["sdc_id"]:
+            errors.append(f"Access denied for {roadmap_id}")
+            continue
+        
+        update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+        if "completed_count" in update:
+            update_data["completed_count"] = update["completed_count"]
+        if "status" in update:
+            update_data["status"] = update["status"]
+        if "notes" in update:
+            update_data["notes"] = update["notes"]
+        
+        await db.training_roadmaps.update_one(
+            {"roadmap_id": roadmap_id},
+            {"$set": update_data}
+        )
+        updated_count += 1
+    
+    return {
+        "message": f"Updated {updated_count} stages",
+        "updated": updated_count,
+        "errors": errors
+    }
+
+# ==================== EXPORT ENDPOINTS ====================
+
+from fastapi.responses import StreamingResponse
+import csv
+import io
+
+@api_router.get("/export/financial-summary")
+async def export_financial_summary(user: User = Depends(require_ho_role)):
+    """Export financial summary as CSV (HO only)"""
+    sdcs = await db.sdcs.find({}, {"_id": 0}).to_list(1000)
+    work_orders = await db.work_orders.find({}, {"_id": 0}).to_list(1000)
+    invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow([
+        "SDC Name", "Location", "Work Orders", "Total Contract", 
+        "Total Billed", "Total Paid", "Outstanding", "Variance", "Variance %"
+    ])
+    
+    for sdc in sdcs:
+        sdc_id = sdc["sdc_id"]
+        sdc_wos = [wo for wo in work_orders if wo.get("sdc_id") == sdc_id]
+        sdc_invs = [inv for inv in invoices if inv.get("sdc_id") == sdc_id]
+        
+        total_contract = sum(wo.get("total_contract_value", 0) for wo in sdc_wos)
+        total_billed = sum(inv.get("billing_value", 0) for inv in sdc_invs)
+        total_paid = sum(inv.get("payment_received", 0) for inv in sdc_invs)
+        outstanding = sum(inv.get("outstanding", 0) for inv in sdc_invs)
+        variance = total_contract - total_billed
+        variance_pct = round((variance / total_contract * 100) if total_contract > 0 else 0, 1)
+        
+        writer.writerow([
+            sdc["name"], sdc["location"], len(sdc_wos), total_contract,
+            total_billed, total_paid, outstanding, variance, f"{variance_pct}%"
+        ])
+    
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=financial_summary.csv"}
+    )
+
+@api_router.get("/export/work-orders")
+async def export_work_orders(sdc_id: Optional[str] = None, user: User = Depends(get_current_user)):
+    """Export work orders as CSV"""
+    query = {}
+    if user.role != "ho":
+        if user.assigned_sdc_id:
+            query["sdc_id"] = user.assigned_sdc_id
+        else:
+            raise HTTPException(status_code=403, detail="No SDC assigned")
+    elif sdc_id:
+        query["sdc_id"] = sdc_id
+    
+    work_orders = await db.work_orders.find(query, {"_id": 0}).to_list(1000)
+    sdcs = await db.sdcs.find({}, {"_id": 0}).to_list(1000)
+    sdc_map = {s["sdc_id"]: s["name"] for s in sdcs}
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    writer.writerow([
+        "Work Order #", "SDC", "Location", "Job Role Code", "Job Role Name",
+        "Scheme", "Students", "Training Hours", "Start Date", "End Date",
+        "Contract Value", "Status"
+    ])
+    
+    for wo in work_orders:
+        writer.writerow([
+            wo["work_order_number"],
+            sdc_map.get(wo["sdc_id"], wo["sdc_id"]),
+            wo["location"],
+            wo["job_role_code"],
+            wo["job_role_name"],
+            wo["scheme_name"],
+            wo["num_students"],
+            wo["total_training_hours"],
+            wo.get("start_date", "Not Set"),
+            wo.get("manual_end_date") or wo.get("calculated_end_date", "Not Set"),
+            wo["total_contract_value"],
+            wo["status"]
+        ])
+    
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=work_orders.csv"}
+    )
+
+@api_router.get("/export/training-progress")
+async def export_training_progress(sdc_id: Optional[str] = None, user: User = Depends(get_current_user)):
+    """Export training progress as CSV"""
+    query = {}
+    if user.role != "ho":
+        if user.assigned_sdc_id:
+            query["sdc_id"] = user.assigned_sdc_id
+        else:
+            raise HTTPException(status_code=403, detail="No SDC assigned")
+    elif sdc_id:
+        query["sdc_id"] = sdc_id
+    
+    roadmaps = await db.training_roadmaps.find(query, {"_id": 0}).to_list(10000)
+    work_orders = await db.work_orders.find(query, {"_id": 0}).to_list(1000)
+    wo_map = {wo["work_order_id"]: wo["work_order_number"] for wo in work_orders}
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    writer.writerow([
+        "Work Order #", "Stage", "Target", "Completed", "Progress %", "Status", "Notes"
+    ])
+    
+    for rm in sorted(roadmaps, key=lambda x: (x["work_order_id"], x["stage_order"])):
+        progress = round((rm["completed_count"] / rm["target_count"] * 100) if rm["target_count"] > 0 else 0, 1)
+        writer.writerow([
+            wo_map.get(rm["work_order_id"], rm["work_order_id"]),
+            rm["stage_name"],
+            rm["target_count"],
+            rm["completed_count"],
+            f"{progress}%",
+            rm["status"],
+            rm.get("notes", "")
+        ])
+    
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=training_progress.csv"}
+    )
+
+@api_router.get("/export/invoices")
+async def export_invoices(sdc_id: Optional[str] = None, user: User = Depends(get_current_user)):
+    """Export invoices as CSV"""
+    query = {}
+    if user.role != "ho":
+        if user.assigned_sdc_id:
+            query["sdc_id"] = user.assigned_sdc_id
+        else:
+            raise HTTPException(status_code=403, detail="No SDC assigned")
+    elif sdc_id:
+        query["sdc_id"] = sdc_id
+    
+    invoices = await db.invoices.find(query, {"_id": 0}).to_list(1000)
+    sdcs = await db.sdcs.find({}, {"_id": 0}).to_list(1000)
+    sdc_map = {s["sdc_id"]: s["name"] for s in sdcs}
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    writer.writerow([
+        "Invoice #", "SDC", "Date", "Order Value", "Billed Amount",
+        "Variance", "Variance %", "Payment Received", "Outstanding", "Status", "Payment Date"
+    ])
+    
+    for inv in invoices:
+        writer.writerow([
+            inv["invoice_number"],
+            sdc_map.get(inv["sdc_id"], inv["sdc_id"]),
+            inv["invoice_date"],
+            inv["order_value"],
+            inv["billing_value"],
+            inv["variance"],
+            f"{inv['variance_percent']}%",
+            inv["payment_received"],
+            inv["outstanding"],
+            inv["status"],
+            inv.get("payment_date", "")
+        ])
+    
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=invoices.csv"}
+    )
+
 # ==================== SDC ENDPOINTS ====================
 
 @api_router.get("/sdcs")
