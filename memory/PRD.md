@@ -93,7 +93,19 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 - All backend routes prefixed with /api
 - Session token stored in httpOnly cookie
 
+## Recent Changes (Feb 17, 2026)
+
+### Bug Fixes ✅
+- [x] Fixed SDC detail page 403 error - User `gautam.hinger@gmail.com` was changed from 'sdc' role to 'ho' role
+- [x] Added "New Work Order" form dialog to Dashboard page
+
+### New Features ✅
+- [x] New Work Order form on Dashboard with auto-SDC creation
+- [x] Form includes: Work Order Number, Location, Job Role, Scheme, Training Hours, Students, Cost per Student
+- [x] Auto-calculated contract value display
+- [x] Success toast and dashboard refresh after creation
+
 ## Next Action Items
-1. Implement Gmail API for automated Risk Summary emails to HO
-2. Add batch progress update UI in SDC Detail page
-3. Export functionality for financial reports
+1. Verify Gmail API end-to-end flow (OAuth → Send Risk Summary Email)
+2. Add Holiday Management CRUD UI to Settings page
+3. Consider adding UserManagement page to navigation (currently created but not accessible)
