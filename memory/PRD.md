@@ -51,6 +51,14 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
   - Training Progress export
   - Invoices export
 
+### New Features (Phase 3) ✅
+- [x] Gmail API Integration for Risk Summary emails
+  - OAuth2 flow for Gmail authorization
+  - HTML formatted Risk Summary emails
+  - Commercial Health metrics in email
+  - All active alerts included
+  - Email sending history log
+
 ### Training Roadmap Stages
 1. Mobilization (Finding students)
 2. Dress Distribution
