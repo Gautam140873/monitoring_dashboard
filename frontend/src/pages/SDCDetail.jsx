@@ -532,7 +532,7 @@ const BatchProgressForm = ({ sdcId, workOrders, onSuccess }) => {
 
     setLoading(true);
     try {
-      await axios.put(`${API}/roadmap/batch-update`, { updates: updatesList });
+      await axios.put(`${API}/roadmaps/batch-update`, { updates: updatesList });
       toast.success(`Updated ${updatesList.length} stages`);
       onSuccess();
     } catch (error) {
