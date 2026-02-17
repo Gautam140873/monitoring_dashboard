@@ -769,7 +769,9 @@ async def create_invoice(invoice_data: InvoiceCreate, user: User = Depends(get_c
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
-    await db.invoices.insert_one(invoice)
+    # Make a copy before insert to avoid _id mutation
+    invoice_to_insert = invoice.copy()
+    await db.invoices.insert_one(invoice_to_insert)
     
     # Check if variance is significant (>10%)
     if abs(variance_percent) > 10:
@@ -785,7 +787,8 @@ async def create_invoice(invoice_data: InvoiceCreate, user: User = Depends(get_c
             "created_at": datetime.now(timezone.utc).isoformat(),
             "resolved": False
         }
-        await db.alerts.insert_one(alert)
+        alert_to_insert = alert.copy()
+        await db.alerts.insert_one(alert_to_insert)
     
     return invoice
 
