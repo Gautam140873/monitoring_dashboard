@@ -105,7 +105,59 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 - [x] Auto-calculated contract value display
 - [x] Success toast and dashboard refresh after creation
 
+---
+
+## 🚧 PLANNED: Master Data Enhancement (Pending - To Resume)
+
+### New Tiered Structure
+```
+WORK ORDER (Umbrella)
+├── Job Role Category: Cat A (₹46/hr) | Cat B (₹42/hr) | Custom
+├── Rate Per Hour: Auto-populated or manual override
+├── Total Course Duration: e.g., 400 hours
+│
+├── SDC 1 (Linked to Work Order)
+│   ├── Target Allocation: Total candidates for center
+│   ├── Batch 1: 30 students, 8hr/day → End Date, Batch Value
+│   ├── Batch 2: 30 students, 6hr/day → End Date, Batch Value
+│   └── SDC Total = Sum of Batch Values
+│
+└── WORK ORDER TOTAL = Sum of all SDC Values
+```
+
+### Financial Calculation Logic
+- **Batch Value** = Candidates × Course Duration × Rate Per Hour
+- **SDC Total** = Sum of all Batch Values within SDC
+- **Work Order Total** = Sum of all SDC Values
+
+### Job Role Category Rates
+| Category | Rate Per Hour |
+|----------|---------------|
+| Cat A / Cat 1 | ₹46/hr |
+| Cat B / Cat 2 | ₹42/hr |
+| Custom | Manual entry |
+
+### New Data Fields Required
+| Feature | Controlled At | Input Type | Impact |
+|---------|--------------|------------|--------|
+| Rate Per Hour | Work Order | Dropdown (Cat A/B) | Financial multiplier |
+| Total Duration | Work Order | Manual | Timeline baseline |
+| Target Allocation | SDC Level | Manual | Center student count |
+| Daily Hours | Batch Level | Dropdown (4,6,8) | End Date calculation |
+| Student Count | Batch Level | Manual (25-30) | Batch Value calculation |
+
+### Implementation Phases (To Do)
+- **Phase 1**: Backend schema updates (new Batch model, Work Order fields)
+- **Phase 2**: API endpoints for SDC/Batch management under Work Orders
+- **Phase 3**: Frontend forms and financial summary dashboard
+
+### Open Questions for Next Session
+1. Migration strategy for existing 7 work orders?
+2. Should 7-stage roadmap be tracked at Batch level?
+
+---
+
 ## Next Action Items
-1. Verify Gmail API end-to-end flow (OAuth → Send Risk Summary Email)
-2. Add Holiday Management CRUD UI to Settings page
-3. Consider adding UserManagement page to navigation (currently created but not accessible)
+1. 🔴 **P0**: Implement Master Data Enhancement (structure above)
+2. 🟡 **P1**: Verify Gmail API end-to-end flow
+3. 🟢 **P2**: Holiday Management CRUD UI in Settings
