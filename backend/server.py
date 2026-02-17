@@ -288,7 +288,9 @@ async def get_or_create_sdc(location: str, manager_email: str = None) -> dict:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "last_updated": datetime.now(timezone.utc).isoformat()
     }
-    await db.sdcs.insert_one(sdc)
+    # Make a copy before insert to avoid _id mutation
+    sdc_to_insert = sdc.copy()
+    await db.sdcs.insert_one(sdc_to_insert)
     logger.info(f"Auto-created SDC: {sdc_name} for location: {location}")
     
     return sdc
