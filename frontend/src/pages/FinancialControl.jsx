@@ -144,6 +144,30 @@ export default function FinancialControl({ user }) {
               <p className="text-sm text-muted-foreground">Commercial Health & Billing Management</p>
             </div>
           </div>
+          
+          {/* Export Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" data-testid="export-btn">
+                <Download className="w-4 h-4 mr-2" />
+                Export Reports
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport('financial-summary')}>
+                Financial Summary (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('work-orders')}>
+                All Work Orders (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('invoices')}>
+                All Invoices (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('training-progress')}>
+                Training Progress (CSV)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
