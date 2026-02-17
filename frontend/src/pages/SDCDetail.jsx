@@ -14,12 +14,14 @@ import {
   Clock,
   AlertTriangle,
   Plus,
-  Edit
+  ClipboardList,
+  Briefcase,
+  GraduationCap,
+  CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -39,6 +41,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -47,14 +50,38 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// Stage icons mapping
+const STAGE_ICONS = {
+  mobilization: Users,
+  dress_distribution: ClipboardList,
+  study_material: FileText,
+  classroom_training: GraduationCap,
+  assessment: CheckCircle2,
+  ojt: Briefcase,
+  placement: Building2
+};
+
+// Stage colors
+const STAGE_COLORS = {
+  mobilization: "bg-amber-500",
+  dress_distribution: "bg-orange-500",
+  study_material: "bg-yellow-500",
+  classroom_training: "bg-blue-500",
+  assessment: "bg-purple-500",
+  ojt: "bg-indigo-500",
+  placement: "bg-emerald-500"
+};
+
 export default function SDCDetail({ user }) {
   const { sdcId } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [sdcData, setSdcData] = useState(null);
-  const [activeTab, setActiveTab] = useState("progress");
-  const [showBatchDialog, setShowBatchDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState("roadmap");
+  const [showWorkOrderDialog, setShowWorkOrderDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [showStartDateDialog, setShowStartDateDialog] = useState(false);
+  const [selectedWorkOrder, setSelectedWorkOrder] = useState(null);
 
   const fetchSDCData = async () => {
     try {
@@ -101,7 +128,7 @@ export default function SDCDetail({ user }) {
     );
   }
 
-  const { progress, financial, job_roles, batches, invoices } = sdcData;
+  const { stage_progress, financial, work_orders, invoices } = sdcData;
 
   return (
     <div className="min-h-screen bg-background" data-testid="sdc-detail">
@@ -119,45 +146,24 @@ export default function SDCDetail({ user }) {
           </div>
           
           <div className="flex items-center gap-2">
-            {(user?.role === "ho" || user?.assigned_sdc_id === sdcId) && (
-              <>
-                <Dialog open={showBatchDialog} onOpenChange={setShowBatchDialog}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" data-testid="add-batch-btn">
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add Batch
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <AddBatchForm 
-                      sdcId={sdcId} 
-                      jobRoles={job_roles} 
-                      onSuccess={() => {
-                        setShowBatchDialog(false);
-                        fetchSDCData();
-                      }} 
-                    />
-                  </DialogContent>
-                </Dialog>
-                
-                <Dialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" data-testid="add-invoice-btn">
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add Invoice
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <AddInvoiceForm 
-                      sdcId={sdcId} 
-                      onSuccess={() => {
-                        setShowInvoiceDialog(false);
-                        fetchSDCData();
-                      }} 
-                    />
-                  </DialogContent>
-                </Dialog>
-              </>
+            {user?.role === "ho" && (
+              <Dialog open={showWorkOrderDialog} onOpenChange={setShowWorkOrderDialog}>
+                <DialogTrigger asChild>
+                  <Button data-testid="add-work-order-btn">
+                    <Plus className="w-4 h-4 mr-1" />
+                    New Work Order
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <AddWorkOrderForm 
+                    location={sdcData.location}
+                    onSuccess={() => {
+                      setShowWorkOrderDialog(false);
+                      fetchSDCData();
+                    }} 
+                  />
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </div>
@@ -165,108 +171,70 @@ export default function SDCDetail({ user }) {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {/* Financial Summary */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <Card className="border border-border animate-fade-in stagger-1">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Users className="w-4 h-4 text-amber-600" />
-                <span className="text-sm text-muted-foreground">Mobilized</span>
-              </div>
-              <div className="font-mono font-bold text-2xl">{progress.mobilized}</div>
+              <div className="text-xs text-muted-foreground mb-1">Total Contract</div>
+              <div className="font-mono font-bold text-lg">{formatCurrency(financial?.total_contract || 0)}</div>
             </CardContent>
           </Card>
-          
           <Card className="border border-border animate-fade-in stagger-2">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock className="w-4 h-4 text-blue-600" />
-                <span className="text-sm text-muted-foreground">In Training</span>
-              </div>
-              <div className="font-mono font-bold text-2xl">{progress.in_training}</div>
+              <div className="text-xs text-muted-foreground mb-1">Total Billed</div>
+              <div className="font-mono font-bold text-lg">{formatCurrency(financial?.total_billed || 0)}</div>
             </CardContent>
           </Card>
-          
           <Card className="border border-border animate-fade-in stagger-3">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <FileText className="w-4 h-4 text-purple-600" />
-                <span className="text-sm text-muted-foreground">Assessed</span>
-              </div>
-              <div className="font-mono font-bold text-2xl">{progress.assessed}</div>
+              <div className="text-xs text-muted-foreground mb-1">Collected</div>
+              <div className="font-mono font-bold text-lg text-emerald-600">{formatCurrency(financial?.total_paid || 0)}</div>
             </CardContent>
           </Card>
-          
           <Card className="border border-border animate-fade-in stagger-4">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle className="w-4 h-4 text-emerald-600" />
-                <span className="text-sm text-muted-foreground">Placed</span>
+              <div className="text-xs text-muted-foreground mb-1">Outstanding</div>
+              <div className={`font-mono font-bold text-lg ${(financial?.total_outstanding || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                {formatCurrency(financial?.total_outstanding || 0)}
               </div>
-              <div className="font-mono font-bold text-2xl text-emerald-600">{progress.placed}</div>
-              <div className="text-xs text-muted-foreground mt-1">{progress.placement_percent}% rate</div>
+            </CardContent>
+          </Card>
+          <Card className="border border-border animate-fade-in stagger-5">
+            <CardContent className="p-4">
+              <div className="text-xs text-muted-foreground mb-1">Variance</div>
+              <div className={`font-mono font-bold text-lg ${(financial?.variance || 0) > 0 ? 'text-amber-600' : ''}`}>
+                {formatCurrency(financial?.variance || 0)}
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Progress Bar */}
-        <Card className="mb-8 border border-border animate-fade-in" data-testid="progress-bar-card">
+        {/* Training Roadmap Progress */}
+        <Card className="mb-8 border border-border animate-fade-in" data-testid="roadmap-card">
           <CardHeader className="pb-2">
-            <CardTitle className="font-heading font-bold">Training Pipeline</CardTitle>
+            <CardTitle className="font-heading font-bold">Training Roadmap</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex h-4 rounded-full overflow-hidden bg-muted">
-              <div 
-                className="bg-amber-500 transition-all duration-500"
-                style={{ width: `${getStagePercent(progress, 'mobilized')}%` }}
-                title={`Mobilized: ${progress.mobilized}`}
-              />
-              <div 
-                className="bg-blue-500 transition-all duration-500"
-                style={{ width: `${getStagePercent(progress, 'in_training')}%` }}
-                title={`In Training: ${progress.in_training}`}
-              />
-              <div 
-                className="bg-purple-500 transition-all duration-500"
-                style={{ width: `${getStagePercent(progress, 'assessed')}%` }}
-                title={`Assessed: ${progress.assessed}`}
-              />
-              <div 
-                className="bg-emerald-500 transition-all duration-500"
-                style={{ width: `${getStagePercent(progress, 'placed')}%` }}
-                title={`Placed: ${progress.placed}`}
-              />
-            </div>
-            <div className="mt-3 flex flex-wrap gap-4">
-              <LegendItem color="bg-amber-500" label="Mobilized" value={progress.mobilized} />
-              <LegendItem color="bg-blue-500" label="Training" value={progress.in_training} />
-              <LegendItem color="bg-purple-500" label="Assessed" value={progress.assessed} />
-              <LegendItem color="bg-emerald-500" label="Placed" value={progress.placed} />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Financial Summary */}
-        <Card className="mb-8 border border-border animate-fade-in" data-testid="financial-summary">
-          <CardHeader className="pb-2">
-            <CardTitle className="font-heading font-bold">Financial Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-6">
-              <div>
-                <div className="text-sm text-muted-foreground mb-1">Total Billed</div>
-                <div className="font-mono font-bold text-xl">{formatCurrency(financial.total_billed)}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground mb-1">Total Paid</div>
-                <div className="font-mono font-bold text-xl text-emerald-600">{formatCurrency(financial.total_paid)}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground mb-1">Outstanding</div>
-                <div className={`font-mono font-bold text-xl ${financial.outstanding > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                  {formatCurrency(financial.outstanding)}
-                </div>
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              {stage_progress && Object.entries(stage_progress).sort((a, b) => a[1].order - b[1].order).map(([stageId, stage]) => {
+                const Icon = STAGE_ICONS[stageId] || Clock;
+                const color = STAGE_COLORS[stageId] || "bg-slate-500";
+                const percent = stage.target > 0 ? Math.round((stage.completed / stage.target) * 100) : 0;
+                
+                return (
+                  <div key={stageId} className="text-center p-3 border border-border rounded-md hover:bg-muted/30 transition-colors">
+                    <div className={`w-8 h-8 mx-auto mb-2 rounded-full ${color} flex items-center justify-center`}>
+                      <Icon className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="font-mono font-bold">{stage.completed}/{stage.target}</div>
+                    <div className="text-xs text-muted-foreground truncate">{stage.name}</div>
+                    <div className="mt-2 h-1 bg-muted rounded-full overflow-hidden">
+                      <div className={`h-full ${color}`} style={{ width: `${percent}%` }} />
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">{percent}%</div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -274,92 +242,72 @@ export default function SDCDetail({ user }) {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="animate-fade-in">
           <TabsList className="mb-6">
-            <TabsTrigger value="progress" data-testid="tab-progress">Batches</TabsTrigger>
-            <TabsTrigger value="jobroles" data-testid="tab-jobroles">Job Roles</TabsTrigger>
+            <TabsTrigger value="roadmap" data-testid="tab-roadmap">Work Orders</TabsTrigger>
             <TabsTrigger value="billing" data-testid="tab-billing">Billing</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="progress">
+          <TabsContent value="roadmap">
             <Card className="border border-border">
               <CardHeader>
-                <CardTitle className="font-heading">Active Batches</CardTitle>
+                <CardTitle className="font-heading">Work Orders</CardTitle>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="uppercase text-xs font-bold tracking-wider">Work Order</TableHead>
+                      <TableHead className="uppercase text-xs font-bold tracking-wider">Job Role</TableHead>
+                      <TableHead className="uppercase text-xs font-bold tracking-wider">Students</TableHead>
                       <TableHead className="uppercase text-xs font-bold tracking-wider">Start</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider">End</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider text-center">Mob</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider text-center">Train</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider text-center">Assess</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider text-center">Placed</TableHead>
+                      <TableHead className="uppercase text-xs font-bold tracking-wider">End (Calc)</TableHead>
+                      <TableHead className="uppercase text-xs font-bold tracking-wider text-right">Value</TableHead>
                       <TableHead className="uppercase text-xs font-bold tracking-wider">Status</TableHead>
+                      <TableHead className="uppercase text-xs font-bold tracking-wider">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {batches?.map((batch) => (
-                      <TableRow key={batch.batch_id} className="hover:bg-muted/50">
-                        <TableCell className="font-mono text-sm">{batch.work_order_number}</TableCell>
-                        <TableCell className="font-mono text-sm">{batch.start_date}</TableCell>
-                        <TableCell className="font-mono text-sm">{batch.end_date}</TableCell>
-                        <TableCell className="text-center font-mono">{batch.mobilized}</TableCell>
-                        <TableCell className="text-center font-mono">{batch.in_training}</TableCell>
-                        <TableCell className="text-center font-mono">{batch.assessed}</TableCell>
-                        <TableCell className="text-center font-mono text-emerald-600">{batch.placed}</TableCell>
+                    {work_orders?.map((wo) => (
+                      <TableRow key={wo.work_order_id} className="hover:bg-muted/50">
+                        <TableCell className="font-mono text-sm">{wo.work_order_number}</TableCell>
                         <TableCell>
-                          <Badge variant={batch.status === "active" ? "default" : "secondary"}>
-                            {batch.status}
+                          <div className="font-medium">{wo.job_role_name}</div>
+                          <div className="text-xs text-muted-foreground">{wo.job_role_code}</div>
+                        </TableCell>
+                        <TableCell className="font-mono">{wo.num_students}</TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {wo.start_date || (
+                            <span className="text-muted-foreground">Not set</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {wo.manual_end_date || wo.calculated_end_date || "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">{formatCurrency(wo.total_contract_value)}</TableCell>
+                        <TableCell>
+                          <Badge variant={wo.status === "active" ? "default" : "secondary"}>
+                            {wo.status}
                           </Badge>
                         </TableCell>
-                      </TableRow>
-                    ))}
-                    {(!batches || batches.length === 0) && (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                          No batches found
+                        <TableCell>
+                          {!wo.start_date && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedWorkOrder(wo);
+                                setShowStartDateDialog(true);
+                              }}
+                            >
+                              Set Start Date
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="jobroles">
-            <Card className="border border-border">
-              <CardHeader>
-                <CardTitle className="font-heading">Job Roles</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider">Code</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider">Name</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider">Awarding Body</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider text-right">Hours</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider text-right">Target</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider text-right">Value</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {job_roles?.map((jr) => (
-                      <TableRow key={jr.job_role_id} className="hover:bg-muted/50">
-                        <TableCell className="font-mono text-sm">{jr.job_role_code}</TableCell>
-                        <TableCell className="font-medium">{jr.job_role_name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{jr.awarding_body}</TableCell>
-                        <TableCell className="text-right font-mono">{jr.training_hours}</TableCell>
-                        <TableCell className="text-right font-mono">{jr.target_candidates}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(jr.total_value)}</TableCell>
-                      </TableRow>
                     ))}
-                    {(!job_roles || job_roles.length === 0) && (
+                    {(!work_orders || work_orders.length === 0) && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                          No job roles found
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                          No work orders found. {user?.role === "ho" && "Click 'New Work Order' to create one."}
                         </TableCell>
                       </TableRow>
                     )}
@@ -371,8 +319,26 @@ export default function SDCDetail({ user }) {
 
           <TabsContent value="billing">
             <Card className="border border-border">
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="font-heading">Invoices</CardTitle>
+                <Dialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" data-testid="add-invoice-btn">
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Invoice
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <AddInvoiceForm 
+                      sdcId={sdcId}
+                      workOrders={work_orders}
+                      onSuccess={() => {
+                        setShowInvoiceDialog(false);
+                        fetchSDCData();
+                      }} 
+                    />
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -380,9 +346,12 @@ export default function SDCDetail({ user }) {
                     <TableRow>
                       <TableHead className="uppercase text-xs font-bold tracking-wider">Invoice #</TableHead>
                       <TableHead className="uppercase text-xs font-bold tracking-wider">Date</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider text-right">Amount</TableHead>
+                      <TableHead className="uppercase text-xs font-bold tracking-wider text-right">Order Value</TableHead>
+                      <TableHead className="uppercase text-xs font-bold tracking-wider text-right">Billed</TableHead>
+                      <TableHead className="uppercase text-xs font-bold tracking-wider text-right">Variance</TableHead>
+                      <TableHead className="uppercase text-xs font-bold tracking-wider text-right">Received</TableHead>
+                      <TableHead className="uppercase text-xs font-bold tracking-wider text-right">Outstanding</TableHead>
                       <TableHead className="uppercase text-xs font-bold tracking-wider">Status</TableHead>
-                      <TableHead className="uppercase text-xs font-bold tracking-wider">Payment Date</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -390,21 +359,31 @@ export default function SDCDetail({ user }) {
                       <TableRow key={inv.invoice_id} className="hover:bg-muted/50">
                         <TableCell className="font-mono text-sm">{inv.invoice_number}</TableCell>
                         <TableCell className="font-mono text-sm">{inv.invoice_date}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(inv.amount)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatCurrency(inv.order_value)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatCurrency(inv.billing_value)}</TableCell>
+                        <TableCell className={`text-right font-mono ${inv.variance > 0 ? 'text-amber-600' : ''}`}>
+                          {inv.variance_percent}%
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-emerald-600">{formatCurrency(inv.payment_received)}</TableCell>
+                        <TableCell className={`text-right font-mono ${inv.outstanding > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {formatCurrency(inv.outstanding)}
+                        </TableCell>
                         <TableCell>
                           <Badge 
                             variant={inv.status === "paid" ? "default" : "secondary"}
-                            className={inv.status === "paid" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-amber-100 text-amber-700 border-amber-200"}
+                            className={
+                              inv.status === "paid" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : 
+                              inv.status === "partial" ? "bg-amber-100 text-amber-700 border-amber-200" : ""
+                            }
                           >
                             {inv.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-mono text-sm">{inv.payment_date || "-"}</TableCell>
                       </TableRow>
                     ))}
                     {(!invoices || invoices.length === 0) && (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                           No invoices found
                         </TableCell>
                       </TableRow>
@@ -415,35 +394,228 @@ export default function SDCDetail({ user }) {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Start Date Dialog */}
+        <Dialog open={showStartDateDialog} onOpenChange={setShowStartDateDialog}>
+          <DialogContent>
+            <SetStartDateForm 
+              workOrder={selectedWorkOrder}
+              onSuccess={() => {
+                setShowStartDateDialog(false);
+                setSelectedWorkOrder(null);
+                fetchSDCData();
+              }} 
+            />
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
 }
 
-// Add Batch Form
-const AddBatchForm = ({ sdcId, jobRoles, onSuccess }) => {
+// Add Work Order Form
+const AddWorkOrderForm = ({ location, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    job_role_id: "",
     work_order_number: "",
-    start_date: "",
-    mobilized: 0
+    location: location,
+    job_role_code: "",
+    job_role_name: "",
+    awarding_body: "",
+    scheme_name: "",
+    total_training_hours: 200,
+    sessions_per_day: 8,
+    num_students: 30,
+    cost_per_student: 10000,
+    manager_email: ""
   });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.post(`${API}/batches`, {
-        sdc_id: sdcId,
+      await axios.post(`${API}/work-orders`, {
         ...formData,
-        mobilized: parseInt(formData.mobilized)
+        total_training_hours: parseInt(formData.total_training_hours),
+        sessions_per_day: parseInt(formData.sessions_per_day),
+        num_students: parseInt(formData.num_students),
+        cost_per_student: parseFloat(formData.cost_per_student)
       });
-      toast.success("Batch created successfully");
+      toast.success("Work Order created successfully");
       onSuccess();
     } catch (error) {
-      console.error("Error creating batch:", error);
-      toast.error("Failed to create batch");
+      console.error("Error creating work order:", error);
+      toast.error("Failed to create work order");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalValue = formData.num_students * formData.cost_per_student;
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Create New Work Order</DialogTitle>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-4 mt-4 max-h-[70vh] overflow-y-auto pr-2">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Work Order Number *</Label>
+            <Input 
+              value={formData.work_order_number}
+              onChange={(e) => setFormData({ ...formData, work_order_number: e.target.value })}
+              placeholder="WO/2025/004"
+              required
+            />
+          </div>
+          <div>
+            <Label>Location</Label>
+            <Input 
+              value={formData.location}
+              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              placeholder="City name"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Job Role Code *</Label>
+            <Input 
+              value={formData.job_role_code}
+              onChange={(e) => setFormData({ ...formData, job_role_code: e.target.value })}
+              placeholder="CSC/Q0801"
+              required
+            />
+          </div>
+          <div>
+            <Label>Job Role Name *</Label>
+            <Input 
+              value={formData.job_role_name}
+              onChange={(e) => setFormData({ ...formData, job_role_name: e.target.value })}
+              placeholder="Field Technician Computing"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Awarding Body *</Label>
+            <Input 
+              value={formData.awarding_body}
+              onChange={(e) => setFormData({ ...formData, awarding_body: e.target.value })}
+              placeholder="NSDC PMKVY"
+              required
+            />
+          </div>
+          <div>
+            <Label>Scheme Name *</Label>
+            <Input 
+              value={formData.scheme_name}
+              onChange={(e) => setFormData({ ...formData, scheme_name: e.target.value })}
+              placeholder="PMKVY 4.0"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Training Hours *</Label>
+            <Input 
+              type="number"
+              value={formData.total_training_hours}
+              onChange={(e) => setFormData({ ...formData, total_training_hours: e.target.value })}
+              min="1"
+              required
+            />
+          </div>
+          <div>
+            <Label>Sessions/Day (hrs)</Label>
+            <Input 
+              type="number"
+              value={formData.sessions_per_day}
+              onChange={(e) => setFormData({ ...formData, sessions_per_day: e.target.value })}
+              min="1"
+              max="12"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Number of Students *</Label>
+            <Input 
+              type="number"
+              value={formData.num_students}
+              onChange={(e) => setFormData({ ...formData, num_students: e.target.value })}
+              min="1"
+              required
+            />
+          </div>
+          <div>
+            <Label>Cost per Student (₹) *</Label>
+            <Input 
+              type="number"
+              value={formData.cost_per_student}
+              onChange={(e) => setFormData({ ...formData, cost_per_student: e.target.value })}
+              min="0"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label>Local Manager Email</Label>
+          <Input 
+            type="email"
+            value={formData.manager_email}
+            onChange={(e) => setFormData({ ...formData, manager_email: e.target.value })}
+            placeholder="manager@example.com"
+          />
+        </div>
+
+        <div className="p-3 bg-muted rounded-md">
+          <div className="text-sm text-muted-foreground">Total Contract Value</div>
+          <div className="font-mono font-bold text-xl">
+            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(totalValue)}
+          </div>
+        </div>
+
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? "Creating..." : "Create Work Order"}
+        </Button>
+      </form>
+    </>
+  );
+};
+
+// Set Start Date Form
+const SetStartDateForm = ({ workOrder, onSuccess }) => {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    start_date: "",
+    manual_end_date: ""
+  });
+
+  if (!workOrder) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await axios.put(`${API}/work-orders/${workOrder.work_order_id}/start-date`, {
+        start_date: formData.start_date,
+        manual_end_date: formData.manual_end_date || null
+      });
+      toast.success("Start date set successfully");
+      onSuccess();
+    } catch (error) {
+      console.error("Error setting start date:", error);
+      toast.error("Failed to set start date");
     } finally {
       setLoading(false);
     }
@@ -452,56 +624,37 @@ const AddBatchForm = ({ sdcId, jobRoles, onSuccess }) => {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Add New Batch</DialogTitle>
+        <DialogTitle>Set Start Date</DialogTitle>
       </DialogHeader>
-      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+      <div className="text-sm text-muted-foreground mb-4">
+        {workOrder.work_order_number} - {workOrder.job_role_name}
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <Label>Job Role</Label>
-          <Select 
-            value={formData.job_role_id} 
-            onValueChange={(v) => setFormData({ ...formData, job_role_id: v })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select job role" />
-            </SelectTrigger>
-            <SelectContent>
-              {jobRoles?.map((jr) => (
-                <SelectItem key={jr.job_role_id} value={jr.job_role_id}>
-                  {jr.job_role_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Work Order Number</Label>
-          <Input 
-            value={formData.work_order_number}
-            onChange={(e) => setFormData({ ...formData, work_order_number: e.target.value })}
-            placeholder="WO/2025/001"
-            required
-          />
-        </div>
-        <div>
-          <Label>Start Date</Label>
+          <Label>Start Date *</Label>
           <Input 
             type="date"
             value={formData.start_date}
             onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
             required
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            End date will be auto-calculated based on {workOrder.total_training_hours} hours at {workOrder.sessions_per_day} hrs/day, skipping Sundays and holidays.
+          </p>
         </div>
         <div>
-          <Label>Mobilized Candidates</Label>
+          <Label>Manual End Date (Optional Override)</Label>
           <Input 
-            type="number"
-            value={formData.mobilized}
-            onChange={(e) => setFormData({ ...formData, mobilized: e.target.value })}
-            min="0"
+            type="date"
+            value={formData.manual_end_date}
+            onChange={(e) => setFormData({ ...formData, manual_end_date: e.target.value })}
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            Only set this if there's a local holiday or special circumstances.
+          </p>
         </div>
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Creating..." : "Create Batch"}
+          {loading ? "Saving..." : "Set Start Date"}
         </Button>
       </form>
     </>
@@ -509,12 +662,15 @@ const AddBatchForm = ({ sdcId, jobRoles, onSuccess }) => {
 };
 
 // Add Invoice Form
-const AddInvoiceForm = ({ sdcId, onSuccess }) => {
+const AddInvoiceForm = ({ sdcId, workOrders, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
+    work_order_id: "",
     invoice_number: "",
     invoice_date: "",
-    amount: ""
+    order_value: "",
+    billing_value: "",
+    notes: ""
   });
 
   const handleSubmit = async (e) => {
@@ -524,7 +680,8 @@ const AddInvoiceForm = ({ sdcId, onSuccess }) => {
       await axios.post(`${API}/invoices`, {
         sdc_id: sdcId,
         ...formData,
-        amount: parseFloat(formData.amount)
+        order_value: parseFloat(formData.order_value),
+        billing_value: parseFloat(formData.billing_value)
       });
       toast.success("Invoice created successfully");
       onSuccess();
@@ -536,6 +693,13 @@ const AddInvoiceForm = ({ sdcId, onSuccess }) => {
     }
   };
 
+  const variance = formData.order_value && formData.billing_value 
+    ? parseFloat(formData.order_value) - parseFloat(formData.billing_value)
+    : 0;
+  const variancePercent = formData.order_value && variance
+    ? ((variance / parseFloat(formData.order_value)) * 100).toFixed(1)
+    : 0;
+
   return (
     <>
       <DialogHeader>
@@ -543,32 +707,90 @@ const AddInvoiceForm = ({ sdcId, onSuccess }) => {
       </DialogHeader>
       <form onSubmit={handleSubmit} className="space-y-4 mt-4">
         <div>
-          <Label>Invoice Number</Label>
-          <Input 
-            value={formData.invoice_number}
-            onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-            placeholder="INV/2025/001"
-            required
-          />
+          <Label>Work Order (Optional)</Label>
+          <Select 
+            value={formData.work_order_id} 
+            onValueChange={(v) => setFormData({ ...formData, work_order_id: v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select work order" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">None</SelectItem>
+              {workOrders?.map((wo) => (
+                <SelectItem key={wo.work_order_id} value={wo.work_order_id}>
+                  {wo.work_order_number} - {wo.job_role_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div>
-          <Label>Invoice Date</Label>
-          <Input 
-            type="date"
-            value={formData.invoice_date}
-            onChange={(e) => setFormData({ ...formData, invoice_date: e.target.value })}
-            required
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Invoice Number *</Label>
+            <Input 
+              value={formData.invoice_number}
+              onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
+              placeholder="INV/2025/001"
+              required
+            />
+          </div>
+          <div>
+            <Label>Invoice Date *</Label>
+            <Input 
+              type="date"
+              value={formData.invoice_date}
+              onChange={(e) => setFormData({ ...formData, invoice_date: e.target.value })}
+              required
+            />
+          </div>
         </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Order Value (₹) *</Label>
+            <Input 
+              type="number"
+              value={formData.order_value}
+              onChange={(e) => setFormData({ ...formData, order_value: e.target.value })}
+              placeholder="100000"
+              min="0"
+              required
+            />
+          </div>
+          <div>
+            <Label>Billing Value (₹) *</Label>
+            <Input 
+              type="number"
+              value={formData.billing_value}
+              onChange={(e) => setFormData({ ...formData, billing_value: e.target.value })}
+              placeholder="100000"
+              min="0"
+              required
+            />
+          </div>
+        </div>
+        
+        {variance !== 0 && (
+          <div className={`p-3 rounded-md ${Math.abs(variancePercent) > 10 ? 'bg-amber-50 border border-amber-200' : 'bg-muted'}`}>
+            <div className="text-sm text-muted-foreground">Variance</div>
+            <div className={`font-mono font-bold ${variancePercent > 10 ? 'text-amber-600' : ''}`}>
+              {variancePercent}% ({new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(variance)})
+            </div>
+            {Math.abs(variancePercent) > 10 && (
+              <div className="text-xs text-amber-600 mt-1">
+                <AlertTriangle className="w-3 h-3 inline mr-1" />
+                Variance exceeds 10% - will generate alert
+              </div>
+            )}
+          </div>
+        )}
+
         <div>
-          <Label>Amount (₹)</Label>
-          <Input 
-            type="number"
-            value={formData.amount}
-            onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-            placeholder="100000"
-            min="0"
-            required
+          <Label>Notes</Label>
+          <Textarea 
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            placeholder="Optional notes about billing variance..."
           />
         </div>
         <Button type="submit" className="w-full" disabled={loading}>
@@ -579,22 +801,6 @@ const AddInvoiceForm = ({ sdcId, onSuccess }) => {
   );
 };
 
-// Helper Components
-const LegendItem = ({ color, label, value }) => (
-  <div className="flex items-center gap-2">
-    <div className={`w-3 h-3 rounded-full ${color}`} />
-    <span className="text-sm text-muted-foreground">{label}:</span>
-    <span className="font-mono text-sm">{value}</span>
-  </div>
-);
-
-const getStagePercent = (progress, stage) => {
-  if (!progress) return 0;
-  const total = (progress.mobilized || 0) + (progress.in_training || 0) + (progress.assessed || 0) + (progress.placed || 0);
-  if (total === 0) return 0;
-  return ((progress[stage] || 0) / total) * 100;
-};
-
 const SDCDetailSkeleton = () => (
   <div className="min-h-screen bg-background">
     <header className="border-b border-border">
@@ -603,12 +809,12 @@ const SDCDetailSkeleton = () => (
       </div>
     </header>
     <main className="max-w-7xl mx-auto px-6 py-8">
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        {[1, 2, 3, 4].map(i => (
-          <Skeleton key={i} className="h-24 rounded-md" />
+      <div className="grid grid-cols-5 gap-4 mb-8">
+        {[1, 2, 3, 4, 5].map(i => (
+          <Skeleton key={i} className="h-20 rounded-md" />
         ))}
       </div>
-      <Skeleton className="h-32 rounded-md mb-8" />
+      <Skeleton className="h-40 rounded-md mb-8" />
       <Skeleton className="h-64 rounded-md" />
     </main>
   </div>
