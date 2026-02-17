@@ -906,7 +906,7 @@ def get_gmail_flow(redirect_uri: str):
 async def gmail_auth_start(request: Request, user: User = Depends(require_ho_role)):
     """Start Gmail OAuth flow (HO only)"""
     # Get the frontend URL for redirect
-    frontend_url = request.headers.get("origin", "https://sdc-manager.preview.emergentagent.com")
+    frontend_url = request.headers.get("origin", "https://skill-tracker-99.preview.emergentagent.com")
     redirect_uri = f"{frontend_url}/api/gmail/callback"
     
     # Use backend URL for callback
@@ -968,12 +968,12 @@ async def gmail_callback(code: str, state: str, request: Request):
         )
         
         # Redirect to settings page
-        frontend_url = os.environ.get("FRONTEND_URL", "https://sdc-manager.preview.emergentagent.com")
+        frontend_url = os.environ.get("FRONTEND_URL", "https://skill-tracker-99.preview.emergentagent.com")
         return RedirectResponse(url=f"{frontend_url}/settings?gmail=connected")
         
     except Exception as e:
         logger.error(f"Gmail OAuth error: {e}")
-        frontend_url = os.environ.get("FRONTEND_URL", "https://sdc-manager.preview.emergentagent.com")
+        frontend_url = os.environ.get("FRONTEND_URL", "https://skill-tracker-99.preview.emergentagent.com")
         return RedirectResponse(url=f"{frontend_url}/settings?gmail=error")
 
 @api_router.get("/gmail/status")
@@ -1107,7 +1107,7 @@ def create_risk_summary_email(alerts: List[dict], dashboard_data: dict, recipien
                 '''}
                 
                 <div class="footer">
-                    <p>This is an automated report from SkillFlow CRM. <a href="https://sdc-manager.preview.emergentagent.com/dashboard">View Dashboard</a></p>
+                    <p>This is an automated report from SkillFlow CRM. <a href="https://skill-tracker-99.preview.emergentagent.com/dashboard">View Dashboard</a></p>
                 </div>
             </div>
         </div>

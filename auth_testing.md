@@ -29,19 +29,19 @@ print('User ID: ' + userId);
 ## Step 2: Test Backend API
 ```bash
 # Test auth endpoint
-curl -X GET "https://sdc-manager.preview.emergentagent.com/api/auth/me" \
+curl -X GET "https://skill-tracker-99.preview.emergentagent.com/api/auth/me" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"
 
 # Test dashboard overview
-curl -X GET "https://sdc-manager.preview.emergentagent.com/api/dashboard/overview" \
+curl -X GET "https://skill-tracker-99.preview.emergentagent.com/api/dashboard/overview" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"
 
 # Test seed data
-curl -X POST "https://sdc-manager.preview.emergentagent.com/api/seed-data" \
+curl -X POST "https://skill-tracker-99.preview.emergentagent.com/api/seed-data" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"
 
 # Test SDCs list
-curl -X GET "https://sdc-manager.preview.emergentagent.com/api/sdcs" \
+curl -X GET "https://skill-tracker-99.preview.emergentagent.com/api/sdcs" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"
 ```
 
@@ -57,7 +57,7 @@ await page.context.add_cookies([{
     "secure": true,
     "sameSite": "None"
 }]);
-await page.goto("https://sdc-manager.preview.emergentagent.com/dashboard");
+await page.goto("https://skill-tracker-99.preview.emergentagent.com/dashboard");
 ```
 
 ## Quick Debug
