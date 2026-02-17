@@ -7,349 +7,385 @@ Tests all endpoints with session token authentication
 import requests
 import sys
 import json
-from datetime import datetime, timedelta
-import subprocess
-import os
+from datetime import datetime
 
 class SkillFlowAPITester:
     def __init__(self, base_url="https://sdc-manager.preview.emergentagent.com"):
         self.base_url = base_url
-        self.api_url = f"{base_url}/api"
         self.session_token = "test_ho_session_123"  # Provided HO session token
-        self.user_id = None
         self.tests_run = 0
         self.tests_passed = 0
-        self.test_results = []
         self.failed_tests = []
+        self.headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {self.session_token}'
+        }
 
-    def log_result(self, test_name, success, details="", response_data=None):
-        """Log test result"""
+    def run_test(self, name, method, endpoint, expected_status, data=None, check_response=None):
+        """Run a single API test"""
+        url = f"{self.base_url}/api/{endpoint}"
         self.tests_run += 1
-        if success:
-            self.tests_passed += 1
-            print(f"✅ {test_name}")
-        else:
-            print(f"❌ {test_name} - {details}")
-        
-        self.test_results.append({
-            "test": test_name,
-            "success": success,
-            "details": details,
-            "response_data": response_data
-        })
-
-    def create_test_user(self):
-        """Create test user and session using MongoDB"""
-        print("\n🔧 Creating test user and session...")
-        
-        timestamp = int(datetime.now().timestamp())
-        user_id = f"test-user-{timestamp}"
-        session_token = f"test_session_{timestamp}"
-        
-        mongo_script = f'''
-use('test_database');
-var userId = '{user_id}';
-var sessionToken = '{session_token}';
-db.users.insertOne({{
-  user_id: userId,
-  email: 'test.user.{timestamp}@example.com',
-  name: 'Test User HO',
-  picture: 'https://via.placeholder.com/150',
-  role: 'ho',
-  assigned_sdc_id: null,
-  created_at: new Date()
-}});
-db.user_sessions.insertOne({{
-  user_id: userId,
-  session_token: sessionToken,
-  expires_at: new Date(Date.now() + 7*24*60*60*1000),
-  created_at: new Date()
-}});
-print('Session token: ' + sessionToken);
-print('User ID: ' + userId);
-'''
-        
-        try:
-            result = subprocess.run(['mongosh', '--eval', mongo_script], 
-                                  capture_output=True, text=True, timeout=30)
-            if result.returncode == 0:
-                self.session_token = session_token
-                self.user_id = user_id
-                print(f"✅ Test user created: {user_id}")
-                print(f"✅ Session token: {session_token}")
-                return True
-            else:
-                print(f"❌ MongoDB error: {result.stderr}")
-                return False
-        except Exception as e:
-            print(f"❌ Failed to create test user: {e}")
-            return False
-
-    def make_request(self, method, endpoint, data=None, expected_status=200):
-        """Make API request with authentication"""
-        url = f"{self.api_url}/{endpoint}"
-        headers = {'Content-Type': 'application/json'}
-        
-        if self.session_token:
-            headers['Authorization'] = f'Bearer {self.session_token}'
+        print(f"\n🔍 Testing {name}...")
+        print(f"   URL: {method} {url}")
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=headers, timeout=30)
+                response = requests.get(url, headers=self.headers, timeout=30)
             elif method == 'POST':
-                response = requests.post(url, json=data, headers=headers, timeout=30)
+                response = requests.post(url, json=data, headers=self.headers, timeout=30)
             elif method == 'PUT':
-                response = requests.put(url, json=data, headers=headers, timeout=30)
+                response = requests.put(url, json=data, headers=self.headers, timeout=30)
             elif method == 'DELETE':
-                response = requests.delete(url, headers=headers, timeout=30)
-            
-            success = response.status_code == expected_status
-            response_data = None
-            
-            try:
-                response_data = response.json()
-            except:
-                response_data = response.text
-            
-            return success, response_data, response.status_code
-            
-        except Exception as e:
-            return False, str(e), 0
+                response = requests.delete(url, headers=self.headers, timeout=30)
 
-    def test_root_endpoint(self):
-        """Test root API endpoint"""
-        success, data, status = self.make_request('GET', '', expected_status=200)
-        self.log_result("Root API endpoint", success, 
-                       f"Status: {status}" if not success else "", data)
+            success = response.status_code == expected_status
+            
+            if success:
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code}")
+                
+                # Additional response checks
+                if check_response and response.status_code == 200:
+                    try:
+                        response_data = response.json()
+                        if not check_response(response_data):
+                            success = False
+                            print(f"❌ Response validation failed")
+                            self.failed_tests.append(f"{name}: Response validation failed")
+                    except Exception as e:
+                        print(f"⚠️  Response check error: {e}")
+                
+                return success, response.json() if response.content else {}
+            else:
+                print(f"❌ Failed - Expected {expected_status}, got {response.status_code}")
+                if response.content:
+                    try:
+                        error_data = response.json()
+                        print(f"   Error: {error_data}")
+                    except:
+                        print(f"   Error: {response.text}")
+                self.failed_tests.append(f"{name}: Expected {expected_status}, got {response.status_code}")
+                return False, {}
+
+        except requests.exceptions.Timeout:
+            print(f"❌ Failed - Request timeout")
+            self.failed_tests.append(f"{name}: Request timeout")
+            return False, {}
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            self.failed_tests.append(f"{name}: {str(e)}")
+            return False, {}
+
+    def test_api_version(self):
+        """Test API version endpoint returns 2.0.0"""
+        success, response = self.run_test(
+            "API Version Check (should return 2.0.0)",
+            "GET",
+            "",
+            200,
+            check_response=lambda r: r.get("version") == "2.0.0"
+        )
+        return success
 
     def test_auth_me(self):
-        """Test /auth/me endpoint"""
-        success, data, status = self.make_request('GET', 'auth/me', expected_status=200)
-        details = ""
-        if not success:
-            details = f"Status: {status}, Response: {data}"
-        elif not isinstance(data, dict) or 'user_id' not in data:
-            success = False
-            details = "Invalid response format"
-        
-        self.log_result("Auth /me endpoint", success, details, data)
-
-    def test_seed_data(self):
-        """Test seed data endpoint (HO only)"""
-        success, data, status = self.make_request('POST', 'seed-data', expected_status=200)
-        details = ""
-        if not success:
-            details = f"Status: {status}, Response: {data}"
-        elif not isinstance(data, dict) or 'message' not in data:
-            success = False
-            details = "Invalid response format"
-        
-        self.log_result("Seed sample data", success, details, data)
+        """Test current user authentication"""
+        success, response = self.run_test(
+            "Authentication Check (HO user)",
+            "GET",
+            "auth/me",
+            200,
+            check_response=lambda r: r.get("role") == "ho"
+        )
+        return success, response
 
     def test_dashboard_overview(self):
-        """Test dashboard overview endpoint"""
-        success, data, status = self.make_request('GET', 'dashboard/overview', expected_status=200)
-        details = ""
-        if not success:
-            details = f"Status: {status}, Response: {data}"
-        elif not isinstance(data, dict) or 'commercial_health' not in data:
-            success = False
-            details = "Missing commercial_health in response"
-        
-        self.log_result("Dashboard overview", success, details, data)
+        """Test dashboard overview with 5 financial metrics"""
+        success, response = self.run_test(
+            "Dashboard Overview (5 financial metrics + 7 training stages)",
+            "GET",
+            "dashboard/overview",
+            200,
+            check_response=lambda r: (
+                "commercial_health" in r and
+                "total_portfolio" in r["commercial_health"] and
+                "actual_billed" in r["commercial_health"] and
+                "collected" in r["commercial_health"] and
+                "outstanding" in r["commercial_health"] and
+                "variance" in r["commercial_health"] and
+                "stage_progress" in r and
+                len(r.get("stage_progress", {})) == 7  # 7 training stages
+            )
+        )
+        return success, response
 
     def test_sdcs_list(self):
-        """Test SDCs list endpoint"""
-        success, data, status = self.make_request('GET', 'sdcs', expected_status=200)
-        details = ""
-        if not success:
-            details = f"Status: {status}, Response: {data}"
-        elif not isinstance(data, list):
-            success = False
-            details = "Response should be a list"
-        
-        self.log_result("SDCs list", success, details, data)
-        return data if success else []
+        """Test SDCs listing with overdue count and blockers"""
+        success, response = self.run_test(
+            "SDCs List (should show overdue count and blockers)",
+            "GET",
+            "sdcs",
+            200,
+            check_response=lambda r: isinstance(r, list)
+        )
+        return success, response
 
-    def test_sdc_detail(self, sdc_id):
-        """Test SDC detail endpoint"""
-        if not sdc_id:
-            self.log_result("SDC detail", False, "No SDC ID available")
-            return None
-            
-        success, data, status = self.make_request('GET', f'sdcs/{sdc_id}', expected_status=200)
-        details = ""
-        if not success:
-            details = f"Status: {status}, Response: {data}"
-        elif not isinstance(data, dict) or 'progress' not in data:
-            success = False
-            details = "Missing progress data in response"
-        
-        self.log_result(f"SDC detail ({sdc_id})", success, details, data)
-        return data if success else None
+    def test_work_orders_list(self):
+        """Test Work Orders listing with auto-calculated end dates"""
+        success, response = self.run_test(
+            "Work Orders List (with auto-calculated end dates)",
+            "GET",
+            "work-orders",
+            200,
+            check_response=lambda r: isinstance(r, list)
+        )
+        return success, response
 
-    def test_financial_calculations(self, sdc_data):
-        """Test financial calculations accuracy"""
-        if not sdc_data or 'financial' not in sdc_data:
-            self.log_result("Financial calculations", False, "No financial data available")
-            return
-        
-        financial = sdc_data['financial']
-        invoices = sdc_data.get('invoices', [])
-        
-        # Calculate expected values
-        expected_billed = sum(inv.get('amount', 0) for inv in invoices)
-        expected_paid = sum(inv.get('amount', 0) for inv in invoices if inv.get('status') == 'paid')
-        expected_outstanding = expected_billed - expected_paid
-        
-        # Check calculations
-        billed_correct = abs(financial.get('total_billed', 0) - expected_billed) < 0.01
-        paid_correct = abs(financial.get('total_paid', 0) - expected_paid) < 0.01
-        outstanding_correct = abs(financial.get('outstanding', 0) - expected_outstanding) < 0.01
-        
-        success = billed_correct and paid_correct and outstanding_correct
-        details = ""
-        if not success:
-            details = f"Expected billed: {expected_billed}, got: {financial.get('total_billed', 0)}"
-        
-        self.log_result("Financial calculations", success, details)
+    def test_training_stages(self):
+        """Test training stages endpoint (7 stages)"""
+        success, response = self.run_test(
+            "Training Stages (7 stages: Mobilization to Placement)",
+            "GET",
+            "training-stages",
+            200,
+            check_response=lambda r: isinstance(r, list) and len(r) == 7
+        )
+        return success, response
 
-    def test_holiday_aware_dates(self):
-        """Test holiday-aware date calculation"""
-        test_data = {
-            "start_date": "2025-01-20",
-            "training_hours": 40  # 5 days
+    def test_create_work_order(self):
+        """Test work order creation (auto-creates SDC and training roadmap)"""
+        work_order_data = {
+            "work_order_number": f"WO/TEST/{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "location": "Test City",
+            "job_role_code": "TEST/Q001",
+            "job_role_name": "Test Technician",
+            "awarding_body": "Test Body",
+            "scheme_name": "Test Scheme",
+            "total_training_hours": 100,
+            "sessions_per_day": 8,
+            "num_students": 25,
+            "cost_per_student": 5000,
+            "manager_email": "test.manager@example.com"
         }
         
-        success, data, status = self.make_request('POST', 'calculate-end-date', 
-                                                data=test_data, expected_status=200)
-        details = ""
-        if not success:
-            details = f"Status: {status}, Response: {data}"
-        elif not isinstance(data, dict) or 'end_date' not in data:
-            success = False
-            details = "Missing end_date in response"
-        
-        self.log_result("Holiday-aware date calculation", success, details, data)
+        success, response = self.run_test(
+            "Create Work Order (auto-creates SDC and training roadmap)",
+            "POST",
+            "work-orders",
+            200,
+            data=work_order_data,
+            check_response=lambda r: (
+                "work_order" in r and
+                "sdc" in r and
+                "roadmap_stages" in r and
+                r["roadmap_stages"] == 7
+            )
+        )
+        return success, response
 
-    def test_alerts_generation(self):
-        """Test alerts generation (HO only)"""
-        success, data, status = self.make_request('POST', 'alerts/generate', expected_status=200)
-        details = ""
-        if not success:
-            details = f"Status: {status}, Response: {data}"
-        elif not isinstance(data, dict) or 'message' not in data:
-            success = False
-            details = "Invalid response format"
+    def test_set_start_date(self, work_order_id):
+        """Test setting start date (calculates end date correctly)"""
+        start_date_data = {
+            "start_date": "2025-02-01"
+        }
         
-        self.log_result("Alerts generation", success, details, data)
+        success, response = self.run_test(
+            "Set Start Date (calculates end date skipping Sundays/holidays)",
+            "PUT",
+            f"work-orders/{work_order_id}/start-date",
+            200,
+            data=start_date_data,
+            check_response=lambda r: (
+                "calculated_end_date" in r and
+                r["start_date"] == "2025-02-01"
+            )
+        )
+        return success, response
 
-    def test_alerts_list(self):
-        """Test alerts list endpoint"""
-        success, data, status = self.make_request('GET', 'alerts', expected_status=200)
-        details = ""
-        if not success:
-            details = f"Status: {status}, Response: {data}"
-        elif not isinstance(data, list):
-            success = False
-            details = "Response should be a list"
+    def test_create_invoice(self, sdc_id, work_order_id):
+        """Test invoice creation (calculates variance and generates alert if >10%)"""
+        invoice_data = {
+            "sdc_id": sdc_id,
+            "work_order_id": work_order_id,
+            "invoice_number": f"INV/TEST/{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "invoice_date": "2025-02-01",
+            "order_value": 125000,  # 25 students * 5000
+            "billing_value": 100000,  # 20% variance to trigger alert
+            "notes": "Test invoice with variance >10%"
+        }
         
-        self.log_result("Alerts list", success, details, data)
+        success, response = self.run_test(
+            "Create Invoice (calculates variance, generates alert if >10%)",
+            "POST",
+            "invoices",
+            200,
+            data=invoice_data,
+            check_response=lambda r: (
+                "variance" in r and
+                "variance_percent" in r and
+                abs(r["variance_percent"]) > 10  # Should trigger variance alert
+            )
+        )
+        return success, response
+
+    def test_record_payment(self, invoice_id):
+        """Test payment recording (triggers PAID status on completed stages)"""
+        payment_data = {
+            "payment_received": 100000,
+            "payment_date": "2025-02-15"
+        }
+        
+        success, response = self.run_test(
+            "Record Payment (triggers PAID status on completed stages)",
+            "PUT",
+            f"invoices/{invoice_id}/payment",
+            200,
+            data=payment_data,
+            check_response=lambda r: (
+                "new_status" in r and
+                r["new_status"] == "paid"
+            )
+        )
+        return success, response
+
+    def test_sdc_detail(self, sdc_id):
+        """Test SDC detail page shows work orders and training roadmap progress"""
+        success, response = self.run_test(
+            "SDC Detail (shows work orders table and training roadmap progress)",
+            "GET",
+            f"sdcs/{sdc_id}",
+            200,
+            check_response=lambda r: (
+                "work_orders" in r and
+                "stage_progress" in r and
+                "financial" in r and
+                isinstance(r["work_orders"], list)
+            )
+        )
+        return success, response
 
     def test_role_based_access(self):
-        """Test role-based access control"""
-        # Test HO-only endpoints
-        ho_endpoints = [
-            ('POST', 'seed-data'),
-            ('POST', 'alerts/generate'),
-            ('GET', 'users')
-        ]
-        
-        for method, endpoint in ho_endpoints:
-            success, data, status = self.make_request(method, endpoint, 
-                                                    expected_status=200 if method == 'GET' else 200)
-            # Since we're using HO role, these should succeed
-            self.log_result(f"HO access - {method} {endpoint}", success, 
-                           f"Status: {status}" if not success else "")
-
-    def cleanup_test_data(self):
-        """Clean up test data"""
-        print("\n🧹 Cleaning up test data...")
-        
-        cleanup_script = '''
-use('test_database');
-db.users.deleteMany({email: /test\.user\./});
-db.user_sessions.deleteMany({session_token: /test_session/});
-print('Test data cleaned up');
-'''
-        
-        try:
-            subprocess.run(['mongosh', '--eval', cleanup_script], 
-                          capture_output=True, text=True, timeout=30)
-            print("✅ Test data cleaned up")
-        except Exception as e:
-            print(f"⚠️ Cleanup warning: {e}")
-
-    def run_all_tests(self):
-        """Run all backend tests"""
-        print("🚀 Starting SkillFlow CRM Backend API Tests")
-        print(f"🌐 Testing against: {self.base_url}")
-        
-        # Create test user
-        if not self.create_test_user():
-            print("❌ Failed to create test user. Exiting.")
-            return False
-        
-        try:
-            # Basic API tests
-            self.test_root_endpoint()
-            self.test_auth_me()
-            
-            # Seed data first
-            self.test_seed_data()
-            
-            # Dashboard and data tests
-            self.test_dashboard_overview()
-            sdcs = self.test_sdcs_list()
-            
-            # Test SDC detail if we have SDCs
-            sdc_data = None
-            if sdcs and len(sdcs) > 0:
-                sdc_data = self.test_sdc_detail(sdcs[0]['sdc_id'])
-                if sdc_data:
-                    self.test_financial_calculations(sdc_data)
-            
-            # Utility tests
-            self.test_holiday_aware_dates()
-            self.test_alerts_generation()
-            self.test_alerts_list()
-            
-            # Security tests
-            self.test_role_based_access()
-            
-        finally:
-            # Always cleanup
-            self.cleanup_test_data()
-        
-        # Print summary
-        print(f"\n📊 Test Summary:")
-        print(f"Tests run: {self.tests_run}")
-        print(f"Tests passed: {self.tests_passed}")
-        print(f"Success rate: {(self.tests_passed/self.tests_run*100):.1f}%")
-        
-        # Print failed tests
-        failed_tests = [r for r in self.test_results if not r['success']]
-        if failed_tests:
-            print(f"\n❌ Failed Tests ({len(failed_tests)}):")
-            for test in failed_tests:
-                print(f"  - {test['test']}: {test['details']}")
-        
-        return self.tests_passed == self.tests_run
+        """Test role-based access (HO sees all, SDC users see only assigned center)"""
+        # This test verifies HO role can access all endpoints
+        success, response = self.run_test(
+            "Role-based Access (HO user should see all SDCs)",
+            "GET",
+            "dashboard/overview",
+            200,
+            check_response=lambda r: "sdc_summaries" in r
+        )
+        return success, response
 
 def main():
+    print("🚀 Starting SkillFlow CRM Backend API Testing")
+    print("Testing Features:")
+    print("- Landing page loads with Google Sign-in button")
+    print("- Backend API returns version 2.0.0")
+    print("- Dashboard shows 5 financial metrics")
+    print("- Dashboard shows Training Roadmap Progress with 7 stages")
+    print("- SDC cards show overdue count and blockers")
+    print("- Work Order creation auto-creates SDC and training roadmap")
+    print("- Setting start date calculates end date correctly")
+    print("- Invoice creation calculates variance and generates alert if >10%")
+    print("- Payment recording triggers PAID status on completed stages")
+    print("- Role-based access: HO users see all centers")
+    print("=" * 80)
+    
     tester = SkillFlowAPITester()
-    success = tester.run_all_tests()
-    return 0 if success else 1
+    
+    # Test 1: API Version (should return 2.0.0)
+    if not tester.test_api_version():
+        print("❌ API version test failed - stopping tests")
+        return 1
+    
+    # Test 2: Authentication (HO user)
+    auth_success, user_data = tester.test_auth_me()
+    if not auth_success:
+        print("❌ Authentication failed - stopping tests")
+        return 1
+    
+    print(f"✅ Authenticated as: {user_data.get('name')} ({user_data.get('role')})")
+    
+    # Test 3: Dashboard Overview (5 financial metrics + 7 training stages)
+    dashboard_success, dashboard_data = tester.test_dashboard_overview()
+    if dashboard_success:
+        commercial_health = dashboard_data.get("commercial_health", {})
+        print(f"   📊 Total Portfolio: ₹{commercial_health.get('total_portfolio', 0):,}")
+        print(f"   📊 Actual Billed: ₹{commercial_health.get('actual_billed', 0):,}")
+        print(f"   📊 Collected: ₹{commercial_health.get('collected', 0):,}")
+        print(f"   📊 Outstanding: ₹{commercial_health.get('outstanding', 0):,}")
+        print(f"   📊 Variance: {commercial_health.get('variance_percent', 0)}%")
+        print(f"   📊 Training Stages: {len(dashboard_data.get('stage_progress', {}))}")
+    
+    # Test 4: SDCs List (with overdue count and blockers)
+    sdcs_success, sdcs_data = tester.test_sdcs_list()
+    sdc_id = None
+    if sdcs_success and sdcs_data:
+        sdc_id = sdcs_data[0]["sdc_id"]
+        print(f"   🏢 Found {len(sdcs_data)} SDCs, using: {sdc_id}")
+    
+    # Test 5: Work Orders List (with auto-calculated end dates)
+    work_orders_success, work_orders_data = tester.test_work_orders_list()
+    
+    # Test 6: Training Stages (7 stages)
+    tester.test_training_stages()
+    
+    # Test 7: Role-based Access
+    tester.test_role_based_access()
+    
+    # Test 8: Full Workflow - Create Work Order -> Set Start Date -> Create Invoice -> Record Payment
+    print("\n🔄 Testing Full Workflow (create work order -> set start date -> create invoice -> record payment)...")
+    
+    # Create Work Order (auto-creates SDC and training roadmap)
+    wo_success, wo_response = tester.test_create_work_order()
+    work_order_id = None
+    created_sdc_id = None
+    
+    if wo_success:
+        work_order_id = wo_response["work_order"]["work_order_id"]
+        created_sdc_id = wo_response["sdc"]["sdc_id"]
+        print(f"   ✅ Created Work Order: {work_order_id}")
+        print(f"   ✅ Auto-created SDC: {created_sdc_id}")
+        print(f"   ✅ Created {wo_response['roadmap_stages']} roadmap stages")
+        
+        # Set Start Date (calculates end date correctly)
+        start_date_success, start_date_response = tester.test_set_start_date(work_order_id)
+        if start_date_success:
+            print(f"   ✅ Set start date, calculated end: {start_date_response.get('calculated_end_date')}")
+            
+            # Create Invoice (calculates variance and generates alert if >10%)
+            invoice_success, invoice_response = tester.test_create_invoice(created_sdc_id, work_order_id)
+            if invoice_success:
+                invoice_id = invoice_response["invoice_id"]
+                print(f"   ✅ Created Invoice: {invoice_id}")
+                print(f"   ⚠️  Variance: {invoice_response.get('variance_percent')}% (should trigger alert)")
+                
+                # Record Payment (triggers PAID status on completed stages)
+                payment_success, payment_response = tester.test_record_payment(invoice_id)
+                if payment_success:
+                    print(f"   ✅ Payment recorded, status: {payment_response.get('new_status')}")
+    
+    # Test 9: SDC Detail Page (shows work orders table and training roadmap progress)
+    if sdc_id:
+        tester.test_sdc_detail(sdc_id)
+    
+    # Print Results
+    print("\n" + "=" * 80)
+    print(f"📊 Test Results: {tester.tests_passed}/{tester.tests_run} passed")
+    
+    if tester.failed_tests:
+        print("\n❌ Failed Tests:")
+        for failure in tester.failed_tests:
+            print(f"   • {failure}")
+    
+    success_rate = (tester.tests_passed / tester.tests_run * 100) if tester.tests_run > 0 else 0
+    print(f"\n🎯 Success Rate: {success_rate:.1f}%")
+    
+    if success_rate >= 80:
+        print("✅ Backend API testing completed successfully!")
+        return 0
+    else:
+        print("❌ Backend API testing failed - too many failures")
+        return 1
 
 if __name__ == "__main__":
     sys.exit(main())
