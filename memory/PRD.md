@@ -70,8 +70,8 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 
 ## Prioritized Backlog
 
-### P0 (Critical - Next Sprint)
-- [ ] Gmail API integration for HO Risk Summary emails (requires Google Cloud OAuth credentials)
+### P0 (Critical) - COMPLETED ✅
+- [x] Gmail API integration for HO Risk Summary emails
 
 ### P1 (High Priority)
 - [ ] Google Sheets bi-directional sync (if needed)
@@ -85,6 +85,7 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 - [ ] Advanced filtering and search
 - [ ] Historical trend charts
 - [ ] Multi-language support
+- [ ] WhatsApp/SMS notifications for local managers
 
 ## Technical Notes
 - Backend API version: 2.0.0
