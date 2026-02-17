@@ -596,6 +596,53 @@ async def set_work_order_start_date(
 
 # ==================== TRAINING ROADMAP ENDPOINTS ====================
 
+class BatchProgressUpdate(BaseModel):
+    """Batch update for multiple roadmap stages"""
+    updates: List[dict]  # [{"roadmap_id": "...", "completed_count": 10, "status": "in_progress"}]
+
+@api_router.put("/roadmaps/batch-update")
+async def batch_update_roadmap(
+    batch_data: BatchProgressUpdate,
+    user: User = Depends(get_current_user)
+):
+    """Batch update multiple roadmap stages at once"""
+    updated_count = 0
+    errors = []
+    
+    for update in batch_data.updates:
+        roadmap_id = update.get("roadmap_id")
+        if not roadmap_id:
+            continue
+            
+        roadmap = await db.training_roadmaps.find_one({"roadmap_id": roadmap_id}, {"_id": 0})
+        if not roadmap:
+            errors.append(f"Roadmap {roadmap_id} not found")
+            continue
+        
+        if user.role != "ho" and user.assigned_sdc_id != roadmap["sdc_id"]:
+            errors.append(f"Access denied for {roadmap_id}")
+            continue
+        
+        update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+        if "completed_count" in update:
+            update_data["completed_count"] = update["completed_count"]
+        if "status" in update:
+            update_data["status"] = update["status"]
+        if "notes" in update:
+            update_data["notes"] = update["notes"]
+        
+        await db.training_roadmaps.update_one(
+            {"roadmap_id": roadmap_id},
+            {"$set": update_data}
+        )
+        updated_count += 1
+    
+    return {
+        "message": f"Updated {updated_count} stages",
+        "updated": updated_count,
+        "errors": errors
+    }
+
 @api_router.get("/roadmap/{work_order_id}")
 async def get_roadmap(work_order_id: str, user: User = Depends(get_current_user)):
     """Get training roadmap for a work order"""
@@ -641,53 +688,6 @@ async def update_roadmap_stage(
     )
     
     return {"message": "Roadmap stage updated"}
-
-class BatchProgressUpdate(BaseModel):
-    """Batch update for multiple roadmap stages"""
-    updates: List[dict]  # [{"roadmap_id": "...", "completed_count": 10, "status": "in_progress"}]
-
-@api_router.put("/roadmap/batch-update")
-async def batch_update_roadmap(
-    batch_data: BatchProgressUpdate,
-    user: User = Depends(get_current_user)
-):
-    """Batch update multiple roadmap stages at once"""
-    updated_count = 0
-    errors = []
-    
-    for update in batch_data.updates:
-        roadmap_id = update.get("roadmap_id")
-        if not roadmap_id:
-            continue
-            
-        roadmap = await db.training_roadmaps.find_one({"roadmap_id": roadmap_id}, {"_id": 0})
-        if not roadmap:
-            errors.append(f"Roadmap {roadmap_id} not found")
-            continue
-        
-        if user.role != "ho" and user.assigned_sdc_id != roadmap["sdc_id"]:
-            errors.append(f"Access denied for {roadmap_id}")
-            continue
-        
-        update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
-        if "completed_count" in update:
-            update_data["completed_count"] = update["completed_count"]
-        if "status" in update:
-            update_data["status"] = update["status"]
-        if "notes" in update:
-            update_data["notes"] = update["notes"]
-        
-        await db.training_roadmaps.update_one(
-            {"roadmap_id": roadmap_id},
-            {"$set": update_data}
-        )
-        updated_count += 1
-    
-    return {
-        "message": f"Updated {updated_count} stages",
-        "updated": updated_count,
-        "errors": errors
-    }
 
 # ==================== EXPORT ENDPOINTS ====================
 
