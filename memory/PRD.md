@@ -43,6 +43,14 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 - [x] Holiday management (global + local holidays)
 - [x] Alert generation for overdue work orders and high variance
 
+### New Features (Phase 2) ✅
+- [x] Batch Progress Update UI - Update multiple roadmap stages at once
+- [x] CSV Export functionality:
+  - Financial Summary export
+  - Work Orders export  
+  - Training Progress export
+  - Invoices export
+
 ### Training Roadmap Stages
 1. Mobilization (Finding students)
 2. Dress Distribution
