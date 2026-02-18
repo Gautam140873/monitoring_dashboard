@@ -122,10 +122,18 @@ WORK ORDER COMPLETION (Auto-release all resources)
 - Session token stored in httpOnly cookie
 
 ## Sample Data
+- **Job Roles (7 total)**:
+  - CSC/Q0801: Field Technician Computing (Cat A, ₹46/hr, 400 hrs)
+  - ELE/Q4601: Solar Panel Installation Technician (Cat B, ₹42/hr, 300 hrs)
+  - THC/Q0301: Front Office Executive (Cat A, ₹46/hr, 300 hrs)
+  - HWC/Q0101: General Duty Assistant (Cat B, ₹42/hr, 400 hrs)
+  - RSC/Q0201: Retail Sales Associate (Cat A, ₹46/hr, 280 hrs)
+  - AUT/Q0102: Automotive Service Technician (Cat B, ₹42/hr, 500 hrs)
+  - BWS/Q0101: Beauty Therapist (Cat A, ₹46/hr, 350 hrs)
 - **Trainers**: Rajesh Kumar, Priya Sharma (available)
 - **Managers**: Amit Verma, Sunita Devi (available)
 - **SDC Centers**: Jaipur Main, Udaipur (available)
-- **Master Work Orders**: 4 orders (WO/2025/PMKVY/001, 002, 003, WO/RSLDC/25-26/001)
+- **Master Work Orders**: 5 orders
 
 ## Files of Reference
 - `/app/backend/server.py` - Main backend with all API endpoints
