@@ -407,6 +407,100 @@ class SDCFromMasterCreate(BaseModel):
     state: Optional[str] = None
     pincode: Optional[str] = None
 
+# ==================== RESOURCE MASTER REQUEST MODELS ====================
+
+class TrainerCreate(BaseModel):
+    """Create a new Trainer"""
+    name: str
+    email: str
+    phone: str
+    qualification: str
+    specialization: str
+    experience_years: int = 0
+    certifications: List[str] = []
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+
+class TrainerUpdate(BaseModel):
+    """Update Trainer"""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    qualification: Optional[str] = None
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    certifications: Optional[List[str]] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    status: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class CenterManagerCreate(BaseModel):
+    """Create a new Center Manager"""
+    name: str
+    email: str
+    phone: str
+    qualification: Optional[str] = None
+    experience_years: int = 0
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+
+class CenterManagerUpdate(BaseModel):
+    """Update Center Manager"""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    qualification: Optional[str] = None
+    experience_years: Optional[int] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    status: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class SDCInfrastructureCreate(BaseModel):
+    """Create SDC Infrastructure"""
+    center_name: str
+    center_code: str
+    district: str
+    address_line1: str
+    address_line2: Optional[str] = None
+    city: str
+    state: str
+    pincode: str
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    total_capacity: int = 30
+    num_classrooms: int = 1
+    num_computer_labs: int = 0
+    has_projector: bool = True
+    has_ac: bool = False
+    has_library: bool = False
+    other_facilities: List[str] = []
+
+class SDCInfrastructureUpdate(BaseModel):
+    """Update SDC Infrastructure"""
+    center_name: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    total_capacity: Optional[int] = None
+    num_classrooms: Optional[int] = None
+    num_computer_labs: Optional[int] = None
+    has_projector: Optional[bool] = None
+    has_ac: Optional[bool] = None
+    has_library: Optional[bool] = None
+    other_facilities: Optional[List[str]] = None
+    status: Optional[str] = None
+    is_active: Optional[bool] = None
+
 # ==================== AUTH HELPERS ====================
 
 async def get_current_user(request: Request) -> User:
