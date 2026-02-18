@@ -913,6 +913,9 @@ export default function MasterData({ user }) {
                             {infra.has_projector && <Badge variant="outline" className="text-xs">Projector</Badge>}
                             {infra.has_ac && <Badge variant="outline" className="text-xs">AC</Badge>}
                             {infra.has_library && <Badge variant="outline" className="text-xs">Library</Badge>}
+                            {infra.has_biometric && <Badge variant="outline" className="text-xs bg-blue-50">Biometric</Badge>}
+                            {infra.has_internet && <Badge variant="outline" className="text-xs bg-green-50">Internet</Badge>}
+                            {infra.has_fire_safety && <Badge variant="outline" className="text-xs bg-red-50">Fire Safety</Badge>}
                           </div>
                         </TableCell>
                         <TableCell>
