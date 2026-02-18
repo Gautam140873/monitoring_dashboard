@@ -1013,6 +1013,86 @@ async def add_sdc_district(master_wo_id: str, district: SDCDistrictAllocation, u
     
     return {"message": f"District {district.district_name} added successfully"}
 
+@api_router.post("/master/work-orders/{master_wo_id}/complete")
+async def complete_master_work_order(master_wo_id: str, user: User = Depends(require_ho_role)):
+    """Mark Master Work Order as completed and release all associated resources (HO only)"""
+    master_wo = await db.master_work_orders.find_one({"master_wo_id": master_wo_id})
+    if not master_wo:
+        raise HTTPException(status_code=404, detail="Master Work Order not found")
+    
+    if master_wo.get("status") == "completed":
+        return {"message": "Work Order is already completed"}
+    
+    # Get all SDCs associated with this master work order
+    sdcs = await db.sdcs.find({"master_wo_id": master_wo_id}, {"_id": 0}).to_list(100)
+    
+    released_resources = {
+        "trainers": 0,
+        "managers": 0,
+        "infrastructure": 0
+    }
+    
+    # Release all trainers assigned to these SDCs
+    for sdc in sdcs:
+        sdc_id = sdc.get("sdc_id")
+        
+        # Release trainers
+        trainer_result = await db.trainers.update_many(
+            {"assigned_sdc_id": sdc_id, "status": "assigned"},
+            {"$set": {
+                "status": "available",
+                "assigned_sdc_id": None,
+                "assigned_work_order_id": None,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        released_resources["trainers"] += trainer_result.modified_count
+        
+        # Release managers
+        manager_result = await db.center_managers.update_many(
+            {"assigned_sdc_id": sdc_id, "status": "assigned"},
+            {"$set": {
+                "status": "available",
+                "assigned_sdc_id": None,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        released_resources["managers"] += manager_result.modified_count
+    
+    # Release infrastructure assigned to this work order
+    infra_result = await db.sdc_infrastructure.update_many(
+        {"assigned_work_order_id": master_wo_id, "status": "in_use"},
+        {"$set": {
+            "status": "available",
+            "assigned_work_order_id": None,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    released_resources["infrastructure"] += infra_result.modified_count
+    
+    # Mark all individual work orders as completed
+    await db.work_orders.update_many(
+        {"master_wo_id": master_wo_id},
+        {"$set": {"status": "completed"}}
+    )
+    
+    # Mark master work order as completed
+    await db.master_work_orders.update_one(
+        {"master_wo_id": master_wo_id},
+        {"$set": {
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    logger.info(f"Completed Master Work Order {master_wo_id}. Released: {released_resources}")
+    
+    return {
+        "message": "Work Order completed and all resources released",
+        "released_resources": released_resources
+    }
+
 @api_router.post("/master/work-orders/{master_wo_id}/sdcs")
 async def create_sdc_from_master(master_wo_id: str, sdc_data: SDCFromMasterCreate, user: User = Depends(require_ho_role)):
     """Create/Open SDC from Master Work Order (HO only)
