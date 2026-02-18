@@ -1311,14 +1311,36 @@ async def update_job_role(job_role_id: str, jr_update: JobRoleMasterUpdate, user
 
 @api_router.delete("/master/job-roles/{job_role_id}")
 async def delete_job_role(job_role_id: str, user: User = Depends(require_ho_role)):
-    """Delete (deactivate) Job Role from Master Data (HO only)"""
-    result = await db.job_role_master.update_one(
-        {"job_role_id": job_role_id},
-        {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    """Soft delete Job Role from Master Data (HO only) - Can be recovered within 30 days"""
+    # Check if exists
+    job_role = await db.job_role_master.find_one(
+        {"job_role_id": job_role_id, "is_deleted": {"$ne": True}}, 
+        {"_id": 0}
     )
-    if result.matched_count == 0:
+    if not job_role:
         raise HTTPException(status_code=404, detail="Job Role not found")
-    return {"message": "Job Role deactivated successfully"}
+    
+    # Soft delete with audit
+    success = await soft_delete_document(
+        collection_name="job_role_master",
+        query={"job_role_id": job_role_id},
+        user_id=user.user_id,
+        user_email=user.email
+    )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to delete Job Role")
+    
+    # Also mark as inactive for backward compatibility
+    await db.job_role_master.update_one(
+        {"job_role_id": job_role_id},
+        {"$set": {"is_active": False}}
+    )
+    
+    return {
+        "message": "Job Role deleted successfully. Can be recovered within 30 days.",
+        "job_role_id": job_role_id
+    }
 
 # ==================== MASTER WORK ORDER ENDPOINTS ====================
 
