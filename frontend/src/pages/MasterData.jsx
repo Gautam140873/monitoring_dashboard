@@ -546,6 +546,395 @@ export default function MasterData({ user }) {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Resources Tab */}
+          <TabsContent value="resources">
+            {/* Resources Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <Card className="border border-border">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-md bg-blue-100 flex items-center justify-center">
+                      <GraduationCap className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <div className="font-mono font-bold text-xl">{resourcesSummary?.trainers?.total || 0}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Trainers ({resourcesSummary?.trainers?.available || 0} available)
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border border-border">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-md bg-purple-100 flex items-center justify-center">
+                      <UserCog className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <div className="font-mono font-bold text-xl">{resourcesSummary?.managers?.total || 0}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Center Managers ({resourcesSummary?.managers?.available || 0} available)
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border border-border">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-md bg-emerald-100 flex items-center justify-center">
+                      <Home className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <div className="font-mono font-bold text-xl">{resourcesSummary?.infrastructure?.total || 0}</div>
+                      <div className="text-xs text-muted-foreground">
+                        SDC/Centers ({resourcesSummary?.infrastructure?.available || 0} available)
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Trainers Section */}
+            <Card className="border border-border mb-6">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="font-heading flex items-center gap-2">
+                    <GraduationCap className="w-5 h-5" />
+                    Trainers
+                  </CardTitle>
+                  <CardDescription>Manage trainer details and availability</CardDescription>
+                </div>
+                <Dialog open={showTrainerDialog} onOpenChange={setShowTrainerDialog}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="add-trainer-btn" onClick={() => setEditingTrainer(null)}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Trainer
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-xl" onInteractOutside={(e) => e.preventDefault()}>
+                    <TrainerForm 
+                      editData={editingTrainer}
+                      jobRoles={jobRoles}
+                      onSuccess={() => {
+                        setShowTrainerDialog(false);
+                        setEditingTrainer(null);
+                        fetchResources();
+                      }}
+                      onCancel={() => setShowTrainerDialog(false)}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="uppercase text-xs font-bold">Name</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Contact</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Specialization</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Experience</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Status</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {trainers.map((trainer) => (
+                      <TableRow key={trainer.trainer_id} className="hover:bg-muted/50">
+                        <TableCell>
+                          <div className="font-medium">{trainer.name}</div>
+                          <div className="text-xs text-muted-foreground">{trainer.qualification}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">{trainer.phone}</div>
+                          <div className="text-xs text-muted-foreground">{trainer.email}</div>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{trainer.specialization}</TableCell>
+                        <TableCell>{trainer.experience_years} years</TableCell>
+                        <TableCell>
+                          <Badge variant={trainer.status === "available" ? "default" : "secondary"} 
+                            className={trainer.status === "available" ? "bg-emerald-100 text-emerald-700" : ""}>
+                            {trainer.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => {
+                                setEditingTrainer(trainer);
+                                setShowTrainerDialog(true);
+                              }}>
+                                <Edit2 className="w-4 h-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              {trainer.status === "assigned" && (
+                                <DropdownMenuItem onClick={async () => {
+                                  try {
+                                    await axios.post(`${API}/resources/trainers/${trainer.trainer_id}/release`);
+                                    toast.success("Trainer released");
+                                    fetchResources();
+                                  } catch (error) {
+                                    toast.error("Failed to release trainer");
+                                  }
+                                }}>
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Release
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {trainers.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <GraduationCap className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          No trainers added. Click "Add Trainer" to create one.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Center Managers Section */}
+            <Card className="border border-border mb-6">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="font-heading flex items-center gap-2">
+                    <UserCog className="w-5 h-5" />
+                    Center Managers
+                  </CardTitle>
+                  <CardDescription>Manage center manager details and assignments</CardDescription>
+                </div>
+                <Dialog open={showManagerDialog} onOpenChange={setShowManagerDialog}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="add-manager-btn" onClick={() => setEditingManager(null)}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Manager
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-xl" onInteractOutside={(e) => e.preventDefault()}>
+                    <ManagerForm 
+                      editData={editingManager}
+                      onSuccess={() => {
+                        setShowManagerDialog(false);
+                        setEditingManager(null);
+                        fetchResources();
+                      }}
+                      onCancel={() => setShowManagerDialog(false)}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="uppercase text-xs font-bold">Name</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Contact</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Experience</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Location</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Status</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {managers.map((manager) => (
+                      <TableRow key={manager.manager_id} className="hover:bg-muted/50">
+                        <TableCell>
+                          <div className="font-medium">{manager.name}</div>
+                          <div className="text-xs text-muted-foreground">{manager.qualification}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">{manager.phone}</div>
+                          <div className="text-xs text-muted-foreground">{manager.email}</div>
+                        </TableCell>
+                        <TableCell>{manager.experience_years} years</TableCell>
+                        <TableCell className="text-sm">{manager.city}, {manager.state}</TableCell>
+                        <TableCell>
+                          <Badge variant={manager.status === "available" ? "default" : "secondary"} 
+                            className={manager.status === "available" ? "bg-emerald-100 text-emerald-700" : ""}>
+                            {manager.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => {
+                                setEditingManager(manager);
+                                setShowManagerDialog(true);
+                              }}>
+                                <Edit2 className="w-4 h-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              {manager.status === "assigned" && (
+                                <DropdownMenuItem onClick={async () => {
+                                  try {
+                                    await axios.post(`${API}/resources/managers/${manager.manager_id}/release`);
+                                    toast.success("Manager released");
+                                    fetchResources();
+                                  } catch (error) {
+                                    toast.error("Failed to release manager");
+                                  }
+                                }}>
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Release
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {managers.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <UserCog className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          No managers added. Click "Add Manager" to create one.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* SDC/Center Infrastructure Section */}
+            <Card className="border border-border">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="font-heading flex items-center gap-2">
+                    <Home className="w-5 h-5" />
+                    SDC/Center Infrastructure
+                  </CardTitle>
+                  <CardDescription>Manage training center details and facilities</CardDescription>
+                </div>
+                <Dialog open={showInfraDialog} onOpenChange={setShowInfraDialog}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="add-infra-btn" onClick={() => setEditingInfra(null)}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Center
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
+                    <InfrastructureForm 
+                      editData={editingInfra}
+                      onSuccess={() => {
+                        setShowInfraDialog(false);
+                        setEditingInfra(null);
+                        fetchResources();
+                      }}
+                      onCancel={() => setShowInfraDialog(false)}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="uppercase text-xs font-bold">Center</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Location</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Capacity</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Facilities</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Status</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {infrastructure.map((infra) => (
+                      <TableRow key={infra.infra_id} className="hover:bg-muted/50">
+                        <TableCell>
+                          <div className="font-medium">{infra.center_name}</div>
+                          <div className="text-xs text-muted-foreground font-mono">{infra.center_code}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">{infra.city}, {infra.district}</div>
+                          <div className="text-xs text-muted-foreground">{infra.state} - {infra.pincode}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-mono">{infra.total_capacity} students</div>
+                          <div className="text-xs text-muted-foreground">
+                            {infra.num_classrooms} classroom{infra.num_classrooms > 1 ? 's' : ''}
+                            {infra.num_computer_labs > 0 && `, ${infra.num_computer_labs} lab${infra.num_computer_labs > 1 ? 's' : ''}`}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {infra.has_projector && <Badge variant="outline" className="text-xs">Projector</Badge>}
+                            {infra.has_ac && <Badge variant="outline" className="text-xs">AC</Badge>}
+                            {infra.has_library && <Badge variant="outline" className="text-xs">Library</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={infra.status === "available" ? "default" : infra.status === "in_use" ? "secondary" : "destructive"} 
+                            className={infra.status === "available" ? "bg-emerald-100 text-emerald-700" : ""}>
+                            {infra.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => {
+                                setEditingInfra(infra);
+                                setShowInfraDialog(true);
+                              }}>
+                                <Edit2 className="w-4 h-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              {infra.status === "in_use" && (
+                                <DropdownMenuItem onClick={async () => {
+                                  try {
+                                    await axios.post(`${API}/resources/infrastructure/${infra.infra_id}/release`);
+                                    toast.success("Center released");
+                                    fetchResources();
+                                  } catch (error) {
+                                    toast.error("Failed to release center");
+                                  }
+                                }}>
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Release
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {infrastructure.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <Home className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          No centers added. Click "Add Center" to create one.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </main>
     </div>
