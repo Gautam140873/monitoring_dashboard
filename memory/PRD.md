@@ -137,6 +137,24 @@ WORK ORDER COMPLETION (Auto-release all resources)
   | RAC/Q0101 | Field Technician AC | Cat A | ₹48/hr | 600 |
   | ELE/Q3101 | Assistant Electrician | Cat B | ₹38/hr | 520 |
 
+- **Trainers (7 total)**:
+  | ID | Name | Domain | Experience | Specialization | NSQF |
+  |----|------|--------|------------|----------------|------|
+  | TR-001 | Amit Sharma | Healthcare | 5 yrs | Wellness Therapist | 4 |
+  | TR-002 | Neha Jain | Retail | 4 yrs | Retail Sales Associate | 3 |
+  | TR-003 | Raj Patel | BFSI | 6 yrs | BFSI Executive | 4 |
+  | TR-004 | Suresh Kumar | Technical | 7 yrs | Field Technician AC | 4 |
+  | TR-005 | Mohit Singh | Electrical | 3 yrs | Assistant Electrician | 3 |
+
+- **SDC Infrastructure (7 centers)**:
+  | ID | Name | District | Capacity | Biometric | Internet | Fire Safety |
+  |----|------|----------|----------|-----------|----------|-------------|
+  | SDC-001 | Aura Skill Centre Udaipur | Udaipur | 120 | ✓ | ✓ | ✓ |
+  | SDC-002 | Aura Skill Centre Jaipur | Jaipur | 100 | ✓ | ✓ | ✗ |
+  | SDC-003 | Aura Skill Centre Ahmedabad | Ahmedabad | 150 | ✓ | ✓ | ✓ |
+  | SDC-004 | Aura Skill Centre Nashik | Nashik | 80 | ✗ | ✓ | ✓ |
+  | SDC-005 | Aura Skill Centre Bhopal | Bhopal | 90 | ✓ | ✗ | ✓ |
+
 - **Master Work Orders (10 total)**:
   | WO Number | Scheme | State | Target | SDCs | Value |
   |-----------|--------|-------|--------|------|-------|
@@ -146,7 +164,7 @@ WORK ORDER COMPLETION (Auto-release all resources)
   | WO-SD-004 | CSR Skill Program | Maharashtra | 150 | 2 | ₹17,28,000 |
   | WO-SD-005 | Rural Skill Dev | MP | 200 | 3 | ₹13,83,200 |
   
-- **Resources**: 2 Trainers, 2 Managers, 2 SDC Centers (all available)
+- **Managers**: 2 available (Amit Verma, Sunita Devi)
 
 ## Files of Reference
 - `/app/backend/server.py` - Main backend with all API endpoints
