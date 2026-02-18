@@ -1973,10 +1973,6 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
     </>
   );
 };
-      </form>
-    </>
-  );
-};
 
 // Skeleton
 const MasterDataSkeleton = () => (
