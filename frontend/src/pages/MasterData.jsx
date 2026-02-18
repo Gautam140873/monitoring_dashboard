@@ -91,6 +91,18 @@ export default function MasterData({ user }) {
   const [selectedMasterWO, setSelectedMasterWO] = useState(null);
   const [editingJobRole, setEditingJobRole] = useState(null);
   const [expandedWO, setExpandedWO] = useState(null);
+  
+  // Resources state
+  const [trainers, setTrainers] = useState([]);
+  const [managers, setManagers] = useState([]);
+  const [infrastructure, setInfrastructure] = useState([]);
+  const [resourcesSummary, setResourcesSummary] = useState(null);
+  const [showTrainerDialog, setShowTrainerDialog] = useState(false);
+  const [showManagerDialog, setShowManagerDialog] = useState(false);
+  const [showInfraDialog, setShowInfraDialog] = useState(false);
+  const [editingTrainer, setEditingTrainer] = useState(null);
+  const [editingManager, setEditingManager] = useState(null);
+  const [editingInfra, setEditingInfra] = useState(null);
 
   // Redirect if not HO
   useEffect(() => {
@@ -115,6 +127,23 @@ export default function MasterData({ user }) {
       toast.error("Failed to load master data");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchResources = async () => {
+    try {
+      const [trainersRes, managersRes, infraRes, summaryRes] = await Promise.all([
+        axios.get(`${API}/resources/trainers`),
+        axios.get(`${API}/resources/managers`),
+        axios.get(`${API}/resources/infrastructure`),
+        axios.get(`${API}/resources/summary`)
+      ]);
+      setTrainers(trainersRes.data);
+      setManagers(managersRes.data);
+      setInfrastructure(infraRes.data);
+      setResourcesSummary(summaryRes.data);
+    } catch (error) {
+      console.error("Error fetching resources:", error);
     }
   };
 
