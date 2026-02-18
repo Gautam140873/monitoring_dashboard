@@ -664,29 +664,63 @@ const JobRoleForm = ({ editData, onSuccess }) => {
   );
 };
 
-// Master Work Order Form Component - Updated for multiple job roles and SDC districts
+// Master Work Order Form Component - Step-by-step with target validation
 const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState(1); // Step 1: Basic info, Step 2: Job roles, Step 3: Districts
   const [formData, setFormData] = useState({
     work_order_number: "",
     awarding_body: "NSDC",
     scheme_name: "PMKVY 4.0",
-    total_training_target: 0
+    total_training_target: 150,
+    num_job_roles: 2
   });
   const [selectedJobRoles, setSelectedJobRoles] = useState([]);
   const [sdcDistricts, setSdcDistricts] = useState([]);
   const [newDistrict, setNewDistrict] = useState({ name: "", count: 1 });
 
+  // Calculate totals
+  const allocatedTarget = selectedJobRoles.reduce((sum, jr) => sum + (jr.target || 0), 0);
+  const remainingTarget = formData.total_training_target - allocatedTarget;
+  const totalValue = selectedJobRoles.reduce((sum, jr) => 
+    sum + ((jr.target || 0) * jr.total_training_hours * jr.rate_per_hour), 0
+  );
+
+  // Check if target is fully allocated
+  const isTargetFullyAllocated = allocatedTarget === formData.total_training_target;
+  const isOverAllocated = allocatedTarget > formData.total_training_target;
+
   const addJobRole = (jobRoleId) => {
+    if (selectedJobRoles.length >= formData.num_job_roles) {
+      toast.error(`Maximum ${formData.num_job_roles} job roles allowed`);
+      return;
+    }
     const jr = jobRoles.find(j => j.job_role_id === jobRoleId);
     if (jr && !selectedJobRoles.find(s => s.job_role_id === jobRoleId)) {
-      setSelectedJobRoles([...selectedJobRoles, { ...jr, target: 30 }]);
+      // Set default target as remaining or 0
+      const defaultTarget = Math.min(remainingTarget, 30);
+      setSelectedJobRoles([...selectedJobRoles, { ...jr, target: defaultTarget > 0 ? defaultTarget : 0 }]);
     }
   };
 
-  const updateJobRoleTarget = (jobRoleId, target) => {
+  const updateJobRoleTarget = (jobRoleId, targetValue) => {
+    const newTarget = parseInt(targetValue) || 0;
+    
+    // Calculate what the new total would be
+    const otherTargets = selectedJobRoles
+      .filter(jr => jr.job_role_id !== jobRoleId)
+      .reduce((sum, jr) => sum + (jr.target || 0), 0);
+    
+    const newTotal = otherTargets + newTarget;
+    
+    // Don't allow exceeding total target
+    if (newTotal > formData.total_training_target) {
+      toast.error(`Cannot exceed total target of ${formData.total_training_target}`);
+      return;
+    }
+    
     setSelectedJobRoles(selectedJobRoles.map(jr => 
-      jr.job_role_id === jobRoleId ? { ...jr, target: parseInt(target) || 0 } : jr
+      jr.job_role_id === jobRoleId ? { ...jr, target: newTarget } : jr
     ));
   };
 
@@ -708,17 +742,14 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
     setSdcDistricts(sdcDistricts.filter((_, i) => i !== index));
   };
 
-  // Calculate totals
-  const totalTarget = selectedJobRoles.reduce((sum, jr) => sum + (jr.target || 0), 0);
-  const totalValue = selectedJobRoles.reduce((sum, jr) => 
-    sum + ((jr.target || 0) * jr.total_training_hours * jr.rate_per_hour), 0
-  );
+  const canProceedToStep2 = formData.work_order_number && formData.total_training_target > 0 && formData.num_job_roles > 0;
+  const canProceedToStep3 = selectedJobRoles.length === formData.num_job_roles && isTargetFullyAllocated;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (selectedJobRoles.length === 0) {
-      toast.error("Please add at least one job role");
+    if (!isTargetFullyAllocated) {
+      toast.error(`Job role targets must equal total target (${formData.total_training_target})`);
       return;
     }
     
@@ -733,7 +764,7 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
         work_order_number: formData.work_order_number,
         awarding_body: formData.awarding_body,
         scheme_name: formData.scheme_name,
-        total_training_target: totalTarget,
+        total_training_target: formData.total_training_target,
         job_roles: selectedJobRoles.map(jr => ({
           job_role_id: jr.job_role_id,
           target: jr.target
@@ -755,165 +786,328 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
       <DialogHeader>
         <DialogTitle>Create Master Work Order</DialogTitle>
         <DialogDescription>
-          Define work order with multiple job roles and SDC districts
+          Step {step} of 3: {step === 1 ? "Basic Information" : step === 2 ? "Job Roles & Targets" : "SDC Districts"}
         </DialogDescription>
       </DialogHeader>
-      <form onSubmit={handleSubmit} className="space-y-4 mt-4" data-testid="master-wo-form">
-        {/* Basic Info */}
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <Label>Work Order Number *</Label>
-            <Input 
-              value={formData.work_order_number}
-              onChange={(e) => setFormData({ ...formData, work_order_number: e.target.value })}
-              placeholder="WO/2025/001"
-              required
-            />
-          </div>
-          <div>
-            <Label>Awarding Body</Label>
-            <Input 
-              value={formData.awarding_body}
-              onChange={(e) => setFormData({ ...formData, awarding_body: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Scheme Name</Label>
-            <Input 
-              value={formData.scheme_name}
-              onChange={(e) => setFormData({ ...formData, scheme_name: e.target.value })}
-            />
-          </div>
-        </div>
 
-        {/* Job Roles Section */}
-        <div className="border border-border rounded-md p-4">
-          <Label className="text-base font-medium mb-2 block">Job Roles & Targets</Label>
-          
-          {/* Add Job Role */}
-          <div className="flex gap-2 mb-3">
-            <Select onValueChange={addJobRole}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select job role to add..." />
-              </SelectTrigger>
-              <SelectContent>
-                {jobRoles.filter(jr => !selectedJobRoles.find(s => s.job_role_id === jr.job_role_id)).map((jr) => (
-                  <SelectItem key={jr.job_role_id} value={jr.job_role_id}>
-                    {jr.job_role_code} - {jr.job_role_name} (Cat {jr.category})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      {/* Progress Indicator */}
+      <div className="flex items-center gap-2 my-4">
+        {[1, 2, 3].map((s) => (
+          <div key={s} className="flex items-center">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+              s < step ? "bg-emerald-500 text-white" : 
+              s === step ? "bg-primary text-primary-foreground" : 
+              "bg-muted text-muted-foreground"
+            }`}>
+              {s < step ? "✓" : s}
+            </div>
+            {s < 3 && <div className={`w-12 h-1 ${s < step ? "bg-emerald-500" : "bg-muted"}`} />}
           </div>
+        ))}
+      </div>
 
-          {/* Selected Job Roles */}
-          {selectedJobRoles.length > 0 ? (
+      <form onSubmit={handleSubmit} className="space-y-4" data-testid="master-wo-form">
+        {/* Step 1: Basic Info */}
+        {step === 1 && (
+          <div className="space-y-4">
+            <div>
+              <Label>Work Order Number *</Label>
+              <Input 
+                value={formData.work_order_number}
+                onChange={(e) => setFormData({ ...formData, work_order_number: e.target.value })}
+                placeholder="WO/2025/001"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Total Training Target *</Label>
+                <Input 
+                  type="number"
+                  value={formData.total_training_target}
+                  onChange={(e) => setFormData({ ...formData, total_training_target: parseInt(e.target.value) || 0 })}
+                  min="1"
+                  required
+                />
+                <p className="text-xs text-muted-foreground mt-1">Total students to be trained</p>
+              </div>
+              <div>
+                <Label>Number of Job Roles *</Label>
+                <Select 
+                  value={String(formData.num_job_roles)} 
+                  onValueChange={(v) => {
+                    setFormData({ ...formData, num_job_roles: parseInt(v) });
+                    setSelectedJobRoles([]); // Reset selected job roles
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <SelectItem key={n} value={String(n)}>{n} Job Role{n > 1 ? 's' : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Awarding Body</Label>
+                <Input 
+                  value={formData.awarding_body}
+                  onChange={(e) => setFormData({ ...formData, awarding_body: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Scheme Name</Label>
+                <Input 
+                  value={formData.scheme_name}
+                  onChange={(e) => setFormData({ ...formData, scheme_name: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="text-sm text-blue-600 font-medium">Configuration Summary</div>
+              <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
+                <div>Total Target: <span className="font-mono font-bold">{formData.total_training_target}</span></div>
+                <div>Job Roles: <span className="font-mono font-bold">{formData.num_job_roles}</span></div>
+              </div>
+            </div>
+
+            <Button 
+              type="button" 
+              className="w-full" 
+              onClick={() => setStep(2)}
+              disabled={!canProceedToStep2}
+            >
+              Next: Select Job Roles
+            </Button>
+          </div>
+        )}
+
+        {/* Step 2: Job Roles */}
+        {step === 2 && (
+          <div className="space-y-4">
+            {/* Target Progress Bar */}
+            <div className="p-4 border border-border rounded-md">
+              <div className="flex justify-between text-sm mb-2">
+                <span>Target Allocation</span>
+                <span className={`font-mono font-bold ${isOverAllocated ? 'text-red-600' : isTargetFullyAllocated ? 'text-emerald-600' : ''}`}>
+                  {allocatedTarget} / {formData.total_training_target}
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-3">
+                <div 
+                  className={`h-3 rounded-full transition-all ${
+                    isOverAllocated ? 'bg-red-500' : 
+                    isTargetFullyAllocated ? 'bg-emerald-500' : 'bg-blue-500'
+                  }`}
+                  style={{ width: `${Math.min((allocatedTarget / formData.total_training_target) * 100, 100)}%` }}
+                />
+              </div>
+              {remainingTarget > 0 && !isOverAllocated && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Remaining to allocate: <span className="font-mono font-bold">{remainingTarget}</span>
+                </p>
+              )}
+              {isTargetFullyAllocated && (
+                <p className="text-xs text-emerald-600 mt-2 font-medium">✓ Target fully allocated</p>
+              )}
+            </div>
+
+            {/* Add Job Role */}
+            <div>
+              <Label>Select Job Roles ({selectedJobRoles.length}/{formData.num_job_roles})</Label>
+              <Select 
+                onValueChange={addJobRole}
+                disabled={selectedJobRoles.length >= formData.num_job_roles}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder={
+                    selectedJobRoles.length >= formData.num_job_roles 
+                      ? "Maximum job roles selected" 
+                      : "Select job role to add..."
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {jobRoles.filter(jr => !selectedJobRoles.find(s => s.job_role_id === jr.job_role_id)).map((jr) => (
+                    <SelectItem key={jr.job_role_id} value={jr.job_role_id}>
+                      {jr.job_role_code} - {jr.job_role_name} (Cat {jr.category}, ₹{jr.rate_per_hour}/hr)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Selected Job Roles */}
             <div className="space-y-2">
-              {selectedJobRoles.map((jr) => (
-                <div key={jr.job_role_id} className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
-                  <div className="flex-1">
-                    <div className="font-medium text-sm">{jr.job_role_code} - {jr.job_role_name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Cat {jr.category} • ₹{jr.rate_per_hour}/hr • {jr.total_training_hours} hrs
+              {selectedJobRoles.map((jr, idx) => (
+                <div key={jr.job_role_id} className="p-3 border border-border rounded-md">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">
+                        {idx + 1}. {jr.job_role_code} - {jr.job_role_name}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Cat {jr.category} • ₹{jr.rate_per_hour}/hr • {jr.total_training_hours} hrs
+                      </div>
                     </div>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8"
+                      onClick={() => removeJobRole(jr.job_role_id)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs">Target:</Label>
+                  <div className="mt-3 flex items-center gap-3">
+                    <Label className="text-xs whitespace-nowrap">Target Students:</Label>
                     <Input 
                       type="number"
                       value={jr.target}
                       onChange={(e) => updateJobRoleTarget(jr.job_role_id, e.target.value)}
-                      className="w-20 h-8"
-                      min="1"
+                      className="w-24 h-8"
+                      min="0"
+                      max={formData.total_training_target}
                     />
+                    <span className="text-xs text-muted-foreground">
+                      Value: {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(jr.target * jr.total_training_hours * jr.rate_per_hour)}
+                    </span>
                   </div>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8"
-                    onClick={() => removeJobRole(jr.job_role_id)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
                 </div>
               ))}
+              
+              {selectedJobRoles.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Select {formData.num_job_roles} job role{formData.num_job_roles > 1 ? 's' : ''} from the dropdown above
+                </p>
+              )}
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">No job roles added yet</p>
-          )}
-        </div>
 
-        {/* SDC Districts Section */}
-        <div className="border border-border rounded-md p-4">
-          <Label className="text-base font-medium mb-2 block">SDC Districts</Label>
-          
-          {/* Add District */}
-          <div className="flex gap-2 mb-3">
-            <Input 
-              placeholder="District name (e.g., Udaipur)"
-              value={newDistrict.name}
-              onChange={(e) => setNewDistrict({ ...newDistrict, name: e.target.value })}
-              className="flex-1"
-            />
-            <Input 
-              type="number"
-              placeholder="SDC count"
-              value={newDistrict.count}
-              onChange={(e) => setNewDistrict({ ...newDistrict, count: parseInt(e.target.value) || 1 })}
-              className="w-24"
-              min="1"
-            />
-            <Button type="button" variant="outline" onClick={addDistrict}>
-              <Plus className="w-4 h-4" />
-            </Button>
+            {/* Navigation */}
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setStep(1)} className="flex-1">
+                Back
+              </Button>
+              <Button 
+                type="button" 
+                className="flex-1" 
+                onClick={() => setStep(3)}
+                disabled={!canProceedToStep3}
+              >
+                Next: SDC Districts
+              </Button>
+            </div>
           </div>
+        )}
 
-          {/* Added Districts */}
-          {sdcDistricts.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {sdcDistricts.map((dist, idx) => (
-                <Badge key={idx} variant="secondary" className="px-3 py-1">
-                  <MapPin className="w-3 h-3 mr-1" />
-                  {dist.district_name} ({dist.sdc_count} SDC{dist.sdc_count > 1 ? 's' : ''})
-                  <button 
-                    type="button"
-                    className="ml-2 hover:text-red-500"
-                    onClick={() => removeDistrict(idx)}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">No districts added yet</p>
-          )}
-        </div>
-
-        {/* Summary */}
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-md">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-sm text-emerald-600">Total Target</div>
-              <div className="font-mono font-bold text-xl">{totalTarget}</div>
-            </div>
-            <div>
-              <div className="text-sm text-emerald-600">Total SDCs</div>
-              <div className="font-mono font-bold text-xl">{sdcDistricts.reduce((sum, d) => sum + d.sdc_count, 0)}</div>
-            </div>
-            <div>
-              <div className="text-sm text-emerald-600">Contract Value</div>
-              <div className="font-mono font-bold text-xl text-emerald-700">
-                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(totalValue)}
+        {/* Step 3: SDC Districts */}
+        {step === 3 && (
+          <div className="space-y-4">
+            {/* Summary */}
+            <div className="p-4 bg-muted/50 rounded-md">
+              <div className="text-sm font-medium mb-2">Work Order Summary</div>
+              <div className="text-xs space-y-1">
+                <div><span className="text-muted-foreground">WO Number:</span> {formData.work_order_number}</div>
+                <div><span className="text-muted-foreground">Total Target:</span> {formData.total_training_target} students</div>
+                <div><span className="text-muted-foreground">Job Roles:</span> {selectedJobRoles.map(jr => `${jr.job_role_code} (${jr.target})`).join(', ')}</div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <Button type="submit" className="w-full" disabled={loading || selectedJobRoles.length === 0 || sdcDistricts.length === 0}>
-          {loading ? "Creating..." : "Create Work Order"}
-        </Button>
+            {/* Add District */}
+            <div>
+              <Label>SDC Districts</Label>
+              <div className="flex gap-2 mt-1">
+                <Input 
+                  placeholder="District name (e.g., Udaipur)"
+                  value={newDistrict.name}
+                  onChange={(e) => setNewDistrict({ ...newDistrict, name: e.target.value })}
+                  className="flex-1"
+                />
+                <Select 
+                  value={String(newDistrict.count)} 
+                  onValueChange={(v) => setNewDistrict({ ...newDistrict, count: parseInt(v) })}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <SelectItem key={n} value={String(n)}>{n} SDC{n > 1 ? 's' : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" onClick={addDistrict}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Add districts where training will be conducted
+              </p>
+            </div>
+
+            {/* Added Districts */}
+            {sdcDistricts.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {sdcDistricts.map((dist, idx) => (
+                  <Badge key={idx} variant="secondary" className="px-3 py-2">
+                    <MapPin className="w-3 h-3 mr-1" />
+                    {dist.district_name} ({dist.sdc_count} SDC{dist.sdc_count > 1 ? 's' : ''})
+                    <button 
+                      type="button"
+                      className="ml-2 hover:text-red-500"
+                      onClick={() => removeDistrict(idx)}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No districts added yet</p>
+            )}
+
+            {/* Final Summary */}
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-md">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-sm text-emerald-600">Total Target</div>
+                  <div className="font-mono font-bold text-xl">{formData.total_training_target}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-emerald-600">Total SDCs</div>
+                  <div className="font-mono font-bold text-xl">{sdcDistricts.reduce((sum, d) => sum + d.sdc_count, 0)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-emerald-600">Contract Value</div>
+                  <div className="font-mono font-bold text-xl text-emerald-700">
+                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(totalValue)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation */}
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setStep(2)} className="flex-1">
+                Back
+              </Button>
+              <Button 
+                type="submit" 
+                className="flex-1" 
+                disabled={loading || sdcDistricts.length === 0}
+              >
+                {loading ? "Creating..." : "Create Work Order"}
+              </Button>
+            </div>
+          </div>
+        )}
       </form>
     </>
   );
