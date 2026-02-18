@@ -422,7 +422,9 @@ class TrainerCreate(BaseModel):
     phone: str
     qualification: str
     specialization: str
+    domain: Optional[str] = None
     experience_years: int = 0
+    nsqf_level: Optional[int] = None
     certifications: List[str] = []
     address: Optional[str] = None
     city: Optional[str] = None
@@ -435,7 +437,9 @@ class TrainerUpdate(BaseModel):
     phone: Optional[str] = None
     qualification: Optional[str] = None
     specialization: Optional[str] = None
+    domain: Optional[str] = None
     experience_years: Optional[int] = None
+    nsqf_level: Optional[int] = None
     certifications: Optional[List[str]] = None
     address: Optional[str] = None
     city: Optional[str] = None
