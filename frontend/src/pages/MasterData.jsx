@@ -14,13 +14,12 @@ import {
   DollarSign,
   Clock,
   ChevronRight,
-  Search,
-  Filter,
+  ChevronDown,
   MoreVertical,
-  CheckCircle2,
-  AlertTriangle,
+  MapPin,
+  Layers,
   Database,
-  Layers
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -57,6 +56,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Category rates
@@ -68,7 +72,7 @@ const CATEGORY_RATES = {
 export default function MasterData({ user }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("job-roles");
+  const [activeTab, setActiveTab] = useState("work-orders");
   const [jobRoles, setJobRoles] = useState([]);
   const [masterWorkOrders, setMasterWorkOrders] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -77,6 +81,7 @@ export default function MasterData({ user }) {
   const [showSDCDialog, setShowSDCDialog] = useState(false);
   const [selectedMasterWO, setSelectedMasterWO] = useState(null);
   const [editingJobRole, setEditingJobRole] = useState(null);
+  const [expandedWO, setExpandedWO] = useState(null);
 
   // Redirect if not HO
   useEffect(() => {
@@ -138,7 +143,7 @@ export default function MasterData({ user }) {
                 <Database className="w-5 h-5" />
                 Master Data
               </h1>
-              <p className="text-sm text-muted-foreground">Manage Job Roles, Work Orders & SDC Configuration</p>
+              <p className="text-sm text-muted-foreground">Manage Work Orders, Job Roles & SDC Configuration</p>
             </div>
           </div>
           <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200">
@@ -151,6 +156,19 @@ export default function MasterData({ user }) {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <Card className="border border-border">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-md bg-purple-100 flex items-center justify-center">
+                  <Layers className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <div className="font-mono font-bold text-xl">{masterWorkOrders.length}</div>
+                  <div className="text-xs text-muted-foreground">Work Orders</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           <Card className="border border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -167,25 +185,12 @@ export default function MasterData({ user }) {
           <Card className="border border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-md bg-purple-100 flex items-center justify-center">
-                  <Layers className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <div className="font-mono font-bold text-xl">{summary?.work_orders?.total || 0}</div>
-                  <div className="text-xs text-muted-foreground">Work Orders</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border border-border">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-md bg-emerald-100 flex items-center justify-center">
                   <Users className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
                   <div className="font-mono font-bold text-xl">{summary?.financials?.total_students || 0}</div>
-                  <div className="text-xs text-muted-foreground">Total Students</div>
+                  <div className="text-xs text-muted-foreground">Total Target</div>
                 </div>
               </div>
             </CardContent>
@@ -198,7 +203,7 @@ export default function MasterData({ user }) {
                 </div>
                 <div>
                   <div className="font-mono font-bold text-xl">{formatCurrency(summary?.financials?.total_contract_value || 0)}</div>
-                  <div className="text-xs text-muted-foreground">Total Contract Value</div>
+                  <div className="text-xs text-muted-foreground">Contract Value</div>
                 </div>
               </div>
             </CardContent>
@@ -208,15 +213,176 @@ export default function MasterData({ user }) {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">
-            <TabsTrigger value="job-roles" data-testid="tab-job-roles">
-              <FileText className="w-4 h-4 mr-2" />
-              Job Roles
-            </TabsTrigger>
             <TabsTrigger value="work-orders" data-testid="tab-work-orders">
               <Layers className="w-4 h-4 mr-2" />
               Work Orders
             </TabsTrigger>
+            <TabsTrigger value="job-roles" data-testid="tab-job-roles">
+              <FileText className="w-4 h-4 mr-2" />
+              Job Roles
+            </TabsTrigger>
           </TabsList>
+
+          {/* Work Orders Tab */}
+          <TabsContent value="work-orders">
+            <Card className="border border-border">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="font-heading">Master Work Orders</CardTitle>
+                  <CardDescription>Create work orders with multiple job roles and SDC districts</CardDescription>
+                </div>
+                <Dialog open={showWorkOrderDialog} onOpenChange={setShowWorkOrderDialog}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="add-work-order-btn" disabled={jobRoles.filter(jr => jr.is_active).length === 0}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      New Work Order
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                    <MasterWorkOrderForm 
+                      jobRoles={jobRoles.filter(jr => jr.is_active)}
+                      onSuccess={() => {
+                        setShowWorkOrderDialog(false);
+                        fetchData();
+                      }} 
+                    />
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                {masterWorkOrders.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Layers className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No work orders created yet.</p>
+                    <p className="text-sm mt-1">First add Job Roles, then create Work Orders.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {masterWorkOrders.map((mwo) => (
+                      <Collapsible 
+                        key={mwo.master_wo_id} 
+                        open={expandedWO === mwo.master_wo_id}
+                        onOpenChange={(open) => setExpandedWO(open ? mwo.master_wo_id : null)}
+                      >
+                        <Card className="border border-border">
+                          <CardContent className="p-4">
+                            <CollapsibleTrigger className="w-full">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 text-left">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h3 className="font-heading font-bold text-lg">{mwo.work_order_number}</h3>
+                                    <Badge variant="outline">{mwo.status}</Badge>
+                                    {expandedWO === mwo.master_wo_id ? 
+                                      <ChevronDown className="w-4 h-4" /> : 
+                                      <ChevronRight className="w-4 h-4" />
+                                    }
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mb-2">
+                                    {mwo.awarding_body} • {mwo.scheme_name}
+                                  </p>
+                                  
+                                  {/* Job Roles Summary */}
+                                  <div className="flex flex-wrap gap-2 mb-3">
+                                    {mwo.job_roles?.map((jr, idx) => (
+                                      <Badge key={idx} variant="secondary" className="text-xs">
+                                        {jr.job_role_code}: {jr.target} students (Cat {jr.category})
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                  
+                                  {/* SDC Districts Summary */}
+                                  <div className="flex flex-wrap gap-2 mb-3">
+                                    {mwo.sdc_districts?.map((dist, idx) => (
+                                      <Badge key={idx} variant="outline" className="text-xs">
+                                        <MapPin className="w-3 h-3 mr-1" />
+                                        {dist.district_name} ({dist.sdc_count} SDC{dist.sdc_count > 1 ? 's' : ''})
+                                      </Badge>
+                                    ))}
+                                  </div>
+
+                                  {/* Totals */}
+                                  <div className="flex items-center gap-6 text-sm">
+                                    <div>
+                                      <span className="text-muted-foreground">Total Target:</span>
+                                      <span className="font-mono font-medium ml-1">{mwo.total_training_target}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-foreground">SDCs Created:</span>
+                                      <span className="font-mono font-medium ml-1">{mwo.sdcs_created_count || 0}/{mwo.num_sdcs}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-foreground">Contract Value:</span>
+                                      <span className="font-mono font-bold text-emerald-600 ml-1">{formatCurrency(mwo.total_contract_value || 0)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </CollapsibleTrigger>
+
+                            <CollapsibleContent>
+                              <div className="mt-4 pt-4 border-t border-border">
+                                {/* SDCs Created */}
+                                <div className="mb-4">
+                                  <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
+                                    <Building2 className="w-4 h-4" />
+                                    SDCs Created
+                                  </h4>
+                                  {mwo.sdcs_created?.length > 0 ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                      {mwo.sdcs_created.map((sdc) => (
+                                        <div 
+                                          key={sdc.sdc_id} 
+                                          className="p-3 bg-muted/50 rounded-md cursor-pointer hover:bg-muted transition-colors"
+                                          onClick={() => navigate(`/sdc/${sdc.sdc_id}`)}
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <span className="font-medium text-sm">{sdc.name}</span>
+                                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                          </div>
+                                          <div className="text-xs text-muted-foreground mt-1">
+                                            {sdc.target_students || 0} students
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">No SDCs created yet</p>
+                                  )}
+                                </div>
+
+                                {/* Create SDC Button */}
+                                <Dialog open={showSDCDialog && selectedMasterWO?.master_wo_id === mwo.master_wo_id} onOpenChange={(open) => {
+                                  setShowSDCDialog(open);
+                                  if (!open) setSelectedMasterWO(null);
+                                }}>
+                                  <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm" onClick={() => setSelectedMasterWO(mwo)}>
+                                      <Plus className="w-4 h-4 mr-1" />
+                                      Create SDC
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-xl">
+                                    <SDCFromMasterForm 
+                                      masterWO={mwo}
+                                      onSuccess={() => {
+                                        setShowSDCDialog(false);
+                                        setSelectedMasterWO(null);
+                                        fetchData();
+                                      }} 
+                                    />
+                                  </DialogContent>
+                                </Dialog>
+                              </div>
+                            </CollapsibleContent>
+                          </CardContent>
+                        </Card>
+                      </Collapsible>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Job Roles Tab */}
           <TabsContent value="job-roles">
@@ -322,127 +488,6 @@ export default function MasterData({ user }) {
                     )}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Work Orders Tab */}
-          <TabsContent value="work-orders">
-            <Card className="border border-border">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="font-heading">Master Work Orders</CardTitle>
-                  <CardDescription>Create work orders and allocate SDCs</CardDescription>
-                </div>
-                <Dialog open={showWorkOrderDialog} onOpenChange={setShowWorkOrderDialog}>
-                  <DialogTrigger asChild>
-                    <Button data-testid="add-work-order-btn" disabled={jobRoles.filter(jr => jr.is_active).length === 0}>
-                      <Plus className="w-4 h-4 mr-1" />
-                      New Work Order
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-xl">
-                    <MasterWorkOrderForm 
-                      jobRoles={jobRoles.filter(jr => jr.is_active)}
-                      onSuccess={() => {
-                        setShowWorkOrderDialog(false);
-                        fetchData();
-                      }} 
-                    />
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {masterWorkOrders.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Layers className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>No work orders created yet.</p>
-                    <p className="text-sm mt-1">First add Job Roles, then create Work Orders.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {masterWorkOrders.map((mwo) => (
-                      <Card key={mwo.master_wo_id} className="border border-border hover:bg-muted/30 transition-colors">
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="font-heading font-bold text-lg">{mwo.work_order_number}</h3>
-                                <Badge variant={mwo.category === "A" ? "default" : "secondary"}>
-                                  Cat {mwo.category} - ₹{mwo.rate_per_hour}/hr
-                                </Badge>
-                                <Badge variant="outline">{mwo.status}</Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground mb-3">
-                                {mwo.job_role_name} ({mwo.job_role_code}) • {mwo.total_training_hours} hours • {mwo.scheme_name}
-                              </p>
-                              
-                              {/* SDCs List */}
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                                {mwo.sdcs?.map((sdc) => (
-                                  <div key={sdc.sdc_id} className="p-3 bg-muted/50 rounded-md">
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-medium text-sm">{sdc.name}</span>
-                                      <Badge variant="outline" className="text-xs">{sdc.target_students || 0} students</Badge>
-                                    </div>
-                                  </div>
-                                ))}
-                                {(!mwo.sdcs || mwo.sdcs.length === 0) && (
-                                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-md col-span-full">
-                                    <p className="text-sm text-amber-700">No SDCs allocated yet. Click "Add SDC" to allocate.</p>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Totals */}
-                              <div className="flex items-center gap-6 text-sm">
-                                <div>
-                                  <span className="text-muted-foreground">SDCs:</span>
-                                  <span className="font-mono font-medium ml-1">{mwo.sdc_count || 0}</span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Students:</span>
-                                  <span className="font-mono font-medium ml-1">{mwo.total_target_students || 0}</span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Contract Value:</span>
-                                  <span className="font-mono font-bold text-emerald-600 ml-1">{formatCurrency(mwo.total_contract_value || 0)}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <Dialog open={showSDCDialog && selectedMasterWO?.master_wo_id === mwo.master_wo_id} onOpenChange={(open) => {
-                                setShowSDCDialog(open);
-                                if (!open) setSelectedMasterWO(null);
-                              }}>
-                                <DialogTrigger asChild>
-                                  <Button variant="outline" size="sm" onClick={() => setSelectedMasterWO(mwo)}>
-                                    <Plus className="w-4 h-4 mr-1" />
-                                    Add SDC
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                  <SDCFromMasterForm 
-                                    masterWO={mwo}
-                                    onSuccess={() => {
-                                      setShowSDCDialog(false);
-                                      setSelectedMasterWO(null);
-                                      fetchData();
-                                    }} 
-                                  />
-                                </DialogContent>
-                              </Dialog>
-                              <Button variant="ghost" size="icon" onClick={() => navigate(`/sdc/${mwo.sdcs?.[0]?.sdc_id || ''}`)}>
-                                <ChevronRight className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -601,17 +646,6 @@ const JobRoleForm = ({ editData, onSuccess }) => {
           </div>
         </div>
 
-        <div>
-          <Label>Default Batch Size</Label>
-          <Input 
-            type="number"
-            value={formData.default_batch_size}
-            onChange={(e) => setFormData({ ...formData, default_batch_size: parseInt(e.target.value) })}
-            min="1"
-            max="100"
-          />
-        </div>
-
         <div className="p-3 bg-muted rounded-md">
           <div className="text-sm text-muted-foreground">Cost Per Student (calculated)</div>
           <div className="font-mono font-bold text-lg">
@@ -630,26 +664,82 @@ const JobRoleForm = ({ editData, onSuccess }) => {
   );
 };
 
-// Master Work Order Form Component
+// Master Work Order Form Component - Updated for multiple job roles and SDC districts
 const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     work_order_number: "",
-    job_role_id: ""
+    awarding_body: "NSDC",
+    scheme_name: "PMKVY 4.0",
+    total_training_target: 0
   });
-  const [selectedJobRole, setSelectedJobRole] = useState(null);
+  const [selectedJobRoles, setSelectedJobRoles] = useState([]);
+  const [sdcDistricts, setSdcDistricts] = useState([]);
+  const [newDistrict, setNewDistrict] = useState({ name: "", count: 1 });
 
-  const handleJobRoleChange = (value) => {
-    const jr = jobRoles.find(j => j.job_role_id === value);
-    setSelectedJobRole(jr);
-    setFormData({ ...formData, job_role_id: value });
+  const addJobRole = (jobRoleId) => {
+    const jr = jobRoles.find(j => j.job_role_id === jobRoleId);
+    if (jr && !selectedJobRoles.find(s => s.job_role_id === jobRoleId)) {
+      setSelectedJobRoles([...selectedJobRoles, { ...jr, target: 30 }]);
+    }
   };
+
+  const updateJobRoleTarget = (jobRoleId, target) => {
+    setSelectedJobRoles(selectedJobRoles.map(jr => 
+      jr.job_role_id === jobRoleId ? { ...jr, target: parseInt(target) || 0 } : jr
+    ));
+  };
+
+  const removeJobRole = (jobRoleId) => {
+    setSelectedJobRoles(selectedJobRoles.filter(jr => jr.job_role_id !== jobRoleId));
+  };
+
+  const addDistrict = () => {
+    if (newDistrict.name.trim()) {
+      setSdcDistricts([...sdcDistricts, { 
+        district_name: newDistrict.name.trim(), 
+        sdc_count: newDistrict.count 
+      }]);
+      setNewDistrict({ name: "", count: 1 });
+    }
+  };
+
+  const removeDistrict = (index) => {
+    setSdcDistricts(sdcDistricts.filter((_, i) => i !== index));
+  };
+
+  // Calculate totals
+  const totalTarget = selectedJobRoles.reduce((sum, jr) => sum + (jr.target || 0), 0);
+  const totalValue = selectedJobRoles.reduce((sum, jr) => 
+    sum + ((jr.target || 0) * jr.total_training_hours * jr.rate_per_hour), 0
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (selectedJobRoles.length === 0) {
+      toast.error("Please add at least one job role");
+      return;
+    }
+    
+    if (sdcDistricts.length === 0) {
+      toast.error("Please add at least one SDC district");
+      return;
+    }
+
     setLoading(true);
     try {
-      await axios.post(`${API}/master/work-orders`, formData);
+      await axios.post(`${API}/master/work-orders`, {
+        work_order_number: formData.work_order_number,
+        awarding_body: formData.awarding_body,
+        scheme_name: formData.scheme_name,
+        total_training_target: totalTarget,
+        job_roles: selectedJobRoles.map(jr => ({
+          job_role_id: jr.job_role_id,
+          target: jr.target
+        })),
+        sdc_districts: sdcDistricts
+      });
       toast.success("Master Work Order created successfully");
       onSuccess();
     } catch (error) {
@@ -665,67 +755,163 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
       <DialogHeader>
         <DialogTitle>Create Master Work Order</DialogTitle>
         <DialogDescription>
-          Create a work order from an existing job role
+          Define work order with multiple job roles and SDC districts
         </DialogDescription>
       </DialogHeader>
       <form onSubmit={handleSubmit} className="space-y-4 mt-4" data-testid="master-wo-form">
-        <div>
-          <Label>Work Order Number *</Label>
-          <Input 
-            value={formData.work_order_number}
-            onChange={(e) => setFormData({ ...formData, work_order_number: e.target.value })}
-            placeholder="WO/2025/001"
-            required
-          />
+        {/* Basic Info */}
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <Label>Work Order Number *</Label>
+            <Input 
+              value={formData.work_order_number}
+              onChange={(e) => setFormData({ ...formData, work_order_number: e.target.value })}
+              placeholder="WO/2025/001"
+              required
+            />
+          </div>
+          <div>
+            <Label>Awarding Body</Label>
+            <Input 
+              value={formData.awarding_body}
+              onChange={(e) => setFormData({ ...formData, awarding_body: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Scheme Name</Label>
+            <Input 
+              value={formData.scheme_name}
+              onChange={(e) => setFormData({ ...formData, scheme_name: e.target.value })}
+            />
+          </div>
         </div>
 
-        <div>
-          <Label>Select Job Role *</Label>
-          <Select value={formData.job_role_id} onValueChange={handleJobRoleChange} required>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a job role..." />
-            </SelectTrigger>
-            <SelectContent>
-              {jobRoles.map((jr) => (
-                <SelectItem key={jr.job_role_id} value={jr.job_role_id}>
-                  {jr.job_role_code} - {jr.job_role_name} (Cat {jr.category})
-                </SelectItem>
+        {/* Job Roles Section */}
+        <div className="border border-border rounded-md p-4">
+          <Label className="text-base font-medium mb-2 block">Job Roles & Targets</Label>
+          
+          {/* Add Job Role */}
+          <div className="flex gap-2 mb-3">
+            <Select onValueChange={addJobRole}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Select job role to add..." />
+              </SelectTrigger>
+              <SelectContent>
+                {jobRoles.filter(jr => !selectedJobRoles.find(s => s.job_role_id === jr.job_role_id)).map((jr) => (
+                  <SelectItem key={jr.job_role_id} value={jr.job_role_id}>
+                    {jr.job_role_code} - {jr.job_role_name} (Cat {jr.category})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Selected Job Roles */}
+          {selectedJobRoles.length > 0 ? (
+            <div className="space-y-2">
+              {selectedJobRoles.map((jr) => (
+                <div key={jr.job_role_id} className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">{jr.job_role_code} - {jr.job_role_name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Cat {jr.category} • ₹{jr.rate_per_hour}/hr • {jr.total_training_hours} hrs
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs">Target:</Label>
+                    <Input 
+                      type="number"
+                      value={jr.target}
+                      onChange={(e) => updateJobRoleTarget(jr.job_role_id, e.target.value)}
+                      className="w-20 h-8"
+                      min="1"
+                    />
+                  </div>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8"
+                    onClick={() => removeJobRole(jr.job_role_id)}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
               ))}
-            </SelectContent>
-          </Select>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">No job roles added yet</p>
+          )}
         </div>
 
-        {selectedJobRole && (
-          <div className="p-4 bg-muted rounded-md space-y-2">
-            <h4 className="font-medium text-sm">Selected Job Role Details:</h4>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Category:</span>
-                <span className="ml-2 font-medium">Cat {selectedJobRole.category}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Rate:</span>
-                <span className="ml-2 font-mono">₹{selectedJobRole.rate_per_hour}/hr</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Duration:</span>
-                <span className="ml-2 font-mono">{selectedJobRole.total_training_hours} hrs</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Scheme:</span>
-                <span className="ml-2">{selectedJobRole.scheme_name}</span>
-              </div>
+        {/* SDC Districts Section */}
+        <div className="border border-border rounded-md p-4">
+          <Label className="text-base font-medium mb-2 block">SDC Districts</Label>
+          
+          {/* Add District */}
+          <div className="flex gap-2 mb-3">
+            <Input 
+              placeholder="District name (e.g., Udaipur)"
+              value={newDistrict.name}
+              onChange={(e) => setNewDistrict({ ...newDistrict, name: e.target.value })}
+              className="flex-1"
+            />
+            <Input 
+              type="number"
+              placeholder="SDC count"
+              value={newDistrict.count}
+              onChange={(e) => setNewDistrict({ ...newDistrict, count: parseInt(e.target.value) || 1 })}
+              className="w-24"
+              min="1"
+            />
+            <Button type="button" variant="outline" onClick={addDistrict}>
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Added Districts */}
+          {sdcDistricts.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {sdcDistricts.map((dist, idx) => (
+                <Badge key={idx} variant="secondary" className="px-3 py-1">
+                  <MapPin className="w-3 h-3 mr-1" />
+                  {dist.district_name} ({dist.sdc_count} SDC{dist.sdc_count > 1 ? 's' : ''})
+                  <button 
+                    type="button"
+                    className="ml-2 hover:text-red-500"
+                    onClick={() => removeDistrict(idx)}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
             </div>
-            <div className="pt-2 border-t border-border mt-2">
-              <span className="text-muted-foreground text-sm">Cost Per Student:</span>
-              <span className="ml-2 font-mono font-bold">
-                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(selectedJobRole.total_training_hours * selectedJobRole.rate_per_hour)}
-              </span>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">No districts added yet</p>
+          )}
+        </div>
+
+        {/* Summary */}
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-md">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <div className="text-sm text-emerald-600">Total Target</div>
+              <div className="font-mono font-bold text-xl">{totalTarget}</div>
+            </div>
+            <div>
+              <div className="text-sm text-emerald-600">Total SDCs</div>
+              <div className="font-mono font-bold text-xl">{sdcDistricts.reduce((sum, d) => sum + d.sdc_count, 0)}</div>
+            </div>
+            <div>
+              <div className="text-sm text-emerald-600">Contract Value</div>
+              <div className="font-mono font-bold text-xl text-emerald-700">
+                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(totalValue)}
+              </div>
             </div>
           </div>
-        )}
+        </div>
 
-        <Button type="submit" className="w-full" disabled={loading || !formData.job_role_id}>
+        <Button type="submit" className="w-full" disabled={loading || selectedJobRoles.length === 0 || sdcDistricts.length === 0}>
           {loading ? "Creating..." : "Create Work Order"}
         </Button>
       </form>
@@ -737,13 +923,28 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
 const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    location: "",
+    district_name: masterWO.sdc_districts?.[0]?.district_name || "",
+    sdc_suffix: "",
+    job_role_id: masterWO.job_roles?.[0]?.job_role_id || "",
     target_students: 30,
     daily_hours: 8,
-    manager_email: ""
+    manager_email: "",
+    address_line1: "",
+    address_line2: "",
+    city: "",
+    state: "",
+    pincode: ""
   });
 
-  const contractValue = formData.target_students * masterWO.total_training_hours * masterWO.rate_per_hour;
+  const selectedJobRole = masterWO.job_roles?.find(jr => jr.job_role_id === formData.job_role_id);
+  const contractValue = selectedJobRole 
+    ? formData.target_students * selectedJobRole.total_training_hours * selectedJobRole.rate_per_hour 
+    : 0;
+
+  // Generate SDC name preview
+  const sdcNamePreview = formData.district_name 
+    ? `SDC_${formData.district_name.toUpperCase().replace(/\s/g, '_')}${formData.sdc_suffix || ''}`
+    : '';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -753,7 +954,7 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
         master_wo_id: masterWO.master_wo_id,
         ...formData
       });
-      toast.success("SDC created and linked to Work Order successfully!");
+      toast.success(`SDC ${sdcNamePreview} created successfully!`);
       onSuccess();
     } catch (error) {
       console.error("Error creating SDC:", error);
@@ -766,37 +967,73 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Add SDC to {masterWO.work_order_number}</DialogTitle>
+        <DialogTitle>Create SDC for {masterWO.work_order_number}</DialogTitle>
         <DialogDescription>
-          Allocate a new Skill Development Center to this work order
+          Create an SDC from the defined districts. Address details can be added here.
         </DialogDescription>
       </DialogHeader>
       <form onSubmit={handleSubmit} className="space-y-4 mt-4" data-testid="sdc-from-master-form">
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-sm">
-          <div className="font-medium text-blue-800">{masterWO.job_role_name}</div>
-          <div className="text-blue-600">
-            Cat {masterWO.category} • ₹{masterWO.rate_per_hour}/hr • {masterWO.total_training_hours} hrs
+        {/* SDC Name Preview */}
+        {sdcNamePreview && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="text-sm text-blue-600">SDC Name (auto-generated)</div>
+            <div className="font-mono font-bold text-blue-800">{sdcNamePreview}</div>
+          </div>
+        )}
+
+        {/* District & Suffix */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>District *</Label>
+            <Select value={formData.district_name} onValueChange={(v) => setFormData({ ...formData, district_name: v })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select district..." />
+              </SelectTrigger>
+              <SelectContent>
+                {masterWO.sdc_districts?.map((dist, idx) => (
+                  <SelectItem key={idx} value={dist.district_name}>
+                    {dist.district_name} ({dist.sdc_count} SDC{dist.sdc_count > 1 ? 's' : ''})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>SDC Suffix (for multiple SDCs)</Label>
+            <Input 
+              value={formData.sdc_suffix}
+              onChange={(e) => setFormData({ ...formData, sdc_suffix: e.target.value })}
+              placeholder="e.g., 1, 2, A, B"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Leave empty for single SDC</p>
           </div>
         </div>
 
+        {/* Job Role Selection */}
         <div>
-          <Label>SDC Location *</Label>
-          <Input 
-            value={formData.location}
-            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-            placeholder="e.g., Delhi, Mumbai, Jaipur"
-            required
-          />
-          <p className="text-xs text-muted-foreground mt-1">Enter city name - SDC will be auto-created if not exists</p>
+          <Label>Job Role *</Label>
+          <Select value={formData.job_role_id} onValueChange={(v) => setFormData({ ...formData, job_role_id: v })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select job role..." />
+            </SelectTrigger>
+            <SelectContent>
+              {masterWO.job_roles?.map((jr) => (
+                <SelectItem key={jr.job_role_id} value={jr.job_role_id}>
+                  {jr.job_role_code} - {jr.job_role_name} (Target: {jr.target})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
+        {/* Target & Hours */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>Target Students *</Label>
             <Input 
               type="number"
               value={formData.target_students}
-              onChange={(e) => setFormData({ ...formData, target_students: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, target_students: parseInt(e.target.value) || 0 })}
               min="1"
               required
             />
@@ -816,8 +1053,9 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
           </div>
         </div>
 
+        {/* Manager Email */}
         <div>
-          <Label>Manager Email (Optional)</Label>
+          <Label>Manager Email</Label>
           <Input 
             type="email"
             value={formData.manager_email}
@@ -826,18 +1064,55 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
           />
         </div>
 
+        {/* Address Details */}
+        <div className="border border-border rounded-md p-4">
+          <Label className="text-base font-medium mb-2 block">Address Details (Optional)</Label>
+          <div className="space-y-3">
+            <Input 
+              value={formData.address_line1}
+              onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })}
+              placeholder="Address Line 1"
+            />
+            <Input 
+              value={formData.address_line2}
+              onChange={(e) => setFormData({ ...formData, address_line2: e.target.value })}
+              placeholder="Address Line 2"
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <Input 
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                placeholder="City"
+              />
+              <Input 
+                value={formData.state}
+                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                placeholder="State"
+              />
+              <Input 
+                value={formData.pincode}
+                onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                placeholder="Pincode"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Contract Value */}
         <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-md">
           <div className="text-sm text-emerald-600">SDC Contract Value</div>
           <div className="font-mono font-bold text-2xl text-emerald-700">
             {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(contractValue)}
           </div>
-          <p className="text-xs text-emerald-600 mt-1">
-            {formData.target_students} students × {masterWO.total_training_hours} hrs × ₹{masterWO.rate_per_hour}/hr
-          </p>
+          {selectedJobRole && (
+            <p className="text-xs text-emerald-600 mt-1">
+              {formData.target_students} students × {selectedJobRole.total_training_hours} hrs × ₹{selectedJobRole.rate_per_hour}/hr
+            </p>
+          )}
         </div>
 
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Creating..." : "Create SDC & Allocate"}
+        <Button type="submit" className="w-full" disabled={loading || !formData.district_name || !formData.job_role_id}>
+          {loading ? "Creating..." : "Create SDC"}
         </Button>
       </form>
     </>
