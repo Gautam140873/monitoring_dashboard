@@ -483,6 +483,9 @@ class SDCInfrastructureCreate(BaseModel):
     has_projector: bool = True
     has_ac: bool = False
     has_library: bool = False
+    has_biometric: bool = False
+    has_internet: bool = False
+    has_fire_safety: bool = False
     other_facilities: List[str] = []
 
 class SDCInfrastructureUpdate(BaseModel):
@@ -501,6 +504,9 @@ class SDCInfrastructureUpdate(BaseModel):
     has_projector: Optional[bool] = None
     has_ac: Optional[bool] = None
     has_library: Optional[bool] = None
+    has_biometric: Optional[bool] = None
+    has_internet: Optional[bool] = None
+    has_fire_safety: Optional[bool] = None
     other_facilities: Optional[List[str]] = None
     status: Optional[str] = None
     is_active: Optional[bool] = None
