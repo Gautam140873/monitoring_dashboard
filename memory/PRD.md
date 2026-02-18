@@ -122,18 +122,31 @@ WORK ORDER COMPLETION (Auto-release all resources)
 - Session token stored in httpOnly cookie
 
 ## Sample Data
-- **Job Roles (7 total)**:
-  - CSC/Q0801: Field Technician Computing (Cat A, ₹46/hr, 400 hrs)
-  - ELE/Q4601: Solar Panel Installation Technician (Cat B, ₹42/hr, 300 hrs)
-  - THC/Q0301: Front Office Executive (Cat A, ₹46/hr, 300 hrs)
-  - HWC/Q0101: General Duty Assistant (Cat B, ₹42/hr, 400 hrs)
-  - RSC/Q0201: Retail Sales Associate (Cat A, ₹46/hr, 280 hrs)
-  - AUT/Q0102: Automotive Service Technician (Cat B, ₹42/hr, 500 hrs)
-  - BWS/Q0101: Beauty Therapist (Cat A, ₹46/hr, 350 hrs)
-- **Trainers**: Rajesh Kumar, Priya Sharma (available)
-- **Managers**: Amit Verma, Sunita Devi (available)
-- **SDC Centers**: Jaipur Main, Udaipur (available)
-- **Master Work Orders**: 5 orders
+- **Job Roles (11 total)**:
+  | Code | Name | Category | Rate | Hours |
+  |------|------|----------|------|-------|
+  | CSC/Q0801 | Field Technician Computing | Cat A | ₹46/hr | 400 |
+  | ELE/Q4601 | Solar Panel Installation | Cat B | ₹42/hr | 300 |
+  | THC/Q0301 | Front Office Executive | Cat A | ₹46/hr | 300 |
+  | HWC/Q0101 | General Duty Assistant | Cat B | ₹42/hr | 400 |
+  | RSC/Q0201 | Retail Sales Associate | Cat A | ₹46/hr | 280 |
+  | AUT/Q0102 | Automotive Service Technician | Cat B | ₹42/hr | 500 |
+  | BWS/Q0101 | Beauty Therapist | Cat A | ₹46/hr | 350 |
+  | HSS/Q5801 | Wellness Therapist (Elderly) | Cat A | ₹45/hr | 700 |
+  | BSC/Q0901 | BFSI Customer Care Executive | Cat B | ₹42/hr | 500 |
+  | RAC/Q0101 | Field Technician AC | Cat A | ₹48/hr | 600 |
+  | ELE/Q3101 | Assistant Electrician | Cat B | ₹38/hr | 520 |
+
+- **Master Work Orders (10 total)**:
+  | WO Number | Scheme | State | Target | SDCs | Value |
+  |-----------|--------|-------|--------|------|-------|
+  | WO-SD-001 | PM-DAKSH | Rajasthan | 300 | 3 | ₹31,50,000 |
+  | WO-SD-002 | MMYKY | Rajasthan | 250 | 2 | ₹14,40,000 |
+  | WO-SD-003 | PMKVY | Gujarat | 400 | 4 | ₹25,20,000 |
+  | WO-SD-004 | CSR Skill Program | Maharashtra | 150 | 2 | ₹17,28,000 |
+  | WO-SD-005 | Rural Skill Dev | MP | 200 | 3 | ₹13,83,200 |
+  
+- **Resources**: 2 Trainers, 2 Managers, 2 SDC Centers (all available)
 
 ## Files of Reference
 - `/app/backend/server.py` - Main backend with all API endpoints
