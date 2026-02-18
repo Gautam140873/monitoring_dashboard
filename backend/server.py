@@ -2916,17 +2916,39 @@ async def get_sdc(sdc_id: str, user: User = Depends(get_current_user)):
 
 @api_router.delete("/sdcs/{sdc_id}")
 async def delete_sdc(sdc_id: str, user: User = Depends(require_ho_role)):
-    """Delete SDC (HO only)"""
-    result = await db.sdcs.delete_one({"sdc_id": sdc_id})
-    if result.deleted_count == 0:
+    """Soft delete SDC (HO only) - Can be recovered within 30 days"""
+    # Check if SDC exists
+    sdc = await db.sdcs.find_one({"sdc_id": sdc_id, "is_deleted": {"$ne": True}}, {"_id": 0})
+    if not sdc:
         raise HTTPException(status_code=404, detail="SDC not found")
     
-    # Delete related data
-    await db.work_orders.delete_many({"sdc_id": sdc_id})
-    await db.training_roadmaps.delete_many({"sdc_id": sdc_id})
-    await db.invoices.delete_many({"sdc_id": sdc_id})
+    # Soft delete SDC
+    success = await soft_delete_document(
+        collection_name="sdcs",
+        query={"sdc_id": sdc_id},
+        user_id=user.user_id,
+        user_email=user.email
+    )
     
-    return {"message": "SDC deleted successfully"}
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to delete SDC")
+    
+    # Soft delete related data
+    await db.work_orders.update_many(
+        {"sdc_id": sdc_id},
+        {"$set": {
+            "is_deleted": True,
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+            "deleted_by": user.user_id,
+            "deleted_by_email": user.email
+        }}
+    )
+    
+    return {
+        "message": "SDC deleted successfully. Can be recovered within 30 days.",
+        "sdc_id": sdc_id,
+        "recovery_days": 30
+    }
 
 # ==================== INVOICE & BILLING ENDPOINTS ====================
 
