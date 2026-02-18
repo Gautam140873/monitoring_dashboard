@@ -60,22 +60,30 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 - [x] SDC naming convention: SDC_DISTRICT or SDC_DISTRICT1, SDC_DISTRICT2
 
 ### Resource Masters ✅ (Feb 18, 2026)
-- [x] **Trainers Master**: Name, Email, Qualification, Specialization, Status tracking
+- [x] **Trainers Master**: Name, Email, Qualification, Specialization, Domain, NSQF Level, Status
 - [x] **Center Managers Master**: Name, Email, Phone, Status tracking
-- [x] **SDC Infrastructure Master**: Center details, Address, Capacity, Facilities, Status tracking
+- [x] **SDC Infrastructure Master**: Center details, Address, Capacity, Biometric/Internet/Fire Safety, Status
 - [x] **Resource Selection in SDC Creation**: Dropdown to select available infrastructure and managers
 - [x] **Address Auto-fill**: When infrastructure is selected, address fields auto-populate
 - [x] **Resource Assignment**: Resources marked as `in_use` / `assigned` when SDC is created
 - [x] **Resource Release**: "Complete & Release Resources" button releases all assigned resources
 - [x] **Dialog Auto-close Fix**: Dialogs no longer close when clicking outside
 
-### New API Endpoints (Feb 18, 2026)
-- `POST /api/master/work-orders/{id}/complete` - Complete work order and release all resources
-- `POST /api/resources/trainers/{id}/assign` - Assign trainer to SDC
-- `POST /api/resources/managers/{id}/assign` - Assign manager to SDC  
-- `POST /api/resources/infrastructure/{id}/assign` - Assign center to work order
-- `POST /api/resources/*/release` - Release resources (mark as available)
-- `GET /api/resources/summary` - Overview with available/assigned counts
+### System Reliability Upgrades ✅ (Feb 18, 2026)
+- [x] **Enhanced RBAC**: 4-tier role system (Admin → HO → Manager → SDC) with permission matrix
+- [x] **Audit Logging**: Complete audit trail for all CRUD operations with old/new value tracking
+- [x] **Soft Delete System**: 30-day recovery window for accidentally deleted records
+- [x] **Database Indexes**: Auto-created on startup for optimized query performance
+- [x] **Error Boundary**: React error boundary with retry mechanism for graceful error handling
+- [x] **Axios Interceptors**: Global error handling for API failures
+- [x] **Duplicate Detection**: Real-time duplicate checking endpoint for data validation
+
+### New Reliability API Endpoints (Feb 18, 2026)
+- `GET /api/audit/logs` - Paginated audit logs with filtering (entity_type, action, user_id, date range)
+- `GET /api/audit/entity/{type}/{id}` - Complete audit history for specific entity
+- `GET /api/deleted/items` - List recoverable soft-deleted items (30-day window)
+- `POST /api/deleted/restore/{type}/{id}` - Restore soft-deleted items
+- `POST /api/validate/duplicate` - Check for duplicate values before creation
 
 ### Data Flow
 ```
@@ -87,6 +95,14 @@ SDC (With assigned resources)
     ↓ Training complete
 WORK ORDER COMPLETION (Auto-release all resources)
 ```
+
+## RBAC Permission System
+| Role | Level | Permissions |
+|------|-------|-------------|
+| Admin | 100 | Full system access, all permissions |
+| HO | 80 | SDCs, Work Orders, Resources, Master Data, Reports, Settings, Audit Read, Restore Deleted |
+| Manager | 50 | Read/Update SDCs, Work Orders, Resources, Reports (team level) |
+| SDC | 20 | Read/Update own SDC only, Read-only for resources and master data |
 
 ## Training Roadmap Stages
 1. Mobilization (Finding students)
