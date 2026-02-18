@@ -44,6 +44,236 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# ==================== RBAC PERMISSIONS SYSTEM ====================
+ROLES = {
+    "admin": {
+        "description": "Full system access",
+        "level": 100,
+        "permissions": ["*"]  # All permissions
+    },
+    "ho": {
+        "description": "Head Office - Full operational access",
+        "level": 80,
+        "permissions": [
+            "sdcs:*", "work_orders:*", "resources:*", "master_data:*",
+            "users:read", "users:update_role", "reports:*", "settings:*",
+            "audit:read", "deleted:restore"
+        ]
+    },
+    "manager": {
+        "description": "Manager - Team lead access",
+        "level": 50,
+        "permissions": [
+            "sdcs:read", "sdcs:update", "work_orders:read", "work_orders:update",
+            "resources:read", "master_data:read", "reports:read",
+            "team:read", "team:update"
+        ]
+    },
+    "sdc": {
+        "description": "SDC User - Limited to assigned center",
+        "level": 20,
+        "permissions": [
+            "sdcs:read:own", "sdcs:update:own", "work_orders:read:own",
+            "resources:read", "master_data:read"
+        ]
+    }
+}
+
+def has_permission(user_role: str, required_permission: str) -> bool:
+    """Check if a role has a specific permission"""
+    role_config = ROLES.get(user_role, ROLES["sdc"])
+    permissions = role_config["permissions"]
+    
+    # Admin has all permissions
+    if "*" in permissions:
+        return True
+    
+    # Check exact match
+    if required_permission in permissions:
+        return True
+    
+    # Check wildcard (e.g., "sdcs:*" matches "sdcs:read")
+    permission_parts = required_permission.split(":")
+    for perm in permissions:
+        perm_parts = perm.split(":")
+        if len(perm_parts) >= 1 and perm_parts[0] == permission_parts[0]:
+            if len(perm_parts) >= 2 and perm_parts[1] == "*":
+                return True
+    
+    return False
+
+def get_role_level(role: str) -> int:
+    """Get the hierarchy level of a role"""
+    return ROLES.get(role, ROLES["sdc"])["level"]
+
+# ==================== AUDIT LOG SYSTEM ====================
+class AuditAction:
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    SOFT_DELETE = "SOFT_DELETE"
+    RESTORE = "RESTORE"
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    PERMISSION_CHANGE = "PERMISSION_CHANGE"
+    STATUS_CHANGE = "STATUS_CHANGE"
+
+async def create_audit_log(
+    action: str,
+    entity_type: str,
+    entity_id: str,
+    user_id: str,
+    user_email: str,
+    changes: dict = None,
+    old_values: dict = None,
+    new_values: dict = None,
+    ip_address: str = None,
+    metadata: dict = None
+):
+    """Create an audit log entry for any system action"""
+    audit_entry = {
+        "audit_id": f"audit_{uuid.uuid4().hex[:12]}",
+        "action": action,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "user_id": user_id,
+        "user_email": user_email,
+        "changes": changes,
+        "old_values": old_values,
+        "new_values": new_values,
+        "ip_address": ip_address,
+        "metadata": metadata or {},
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.audit_logs.insert_one(audit_entry)
+    logger.info(f"AUDIT: {action} on {entity_type}/{entity_id} by {user_email}")
+    return audit_entry
+
+# ==================== SOFT DELETE HELPERS ====================
+async def soft_delete_document(
+    collection_name: str,
+    query: dict,
+    user_id: str,
+    user_email: str
+) -> bool:
+    """Soft delete a document by setting is_deleted flag"""
+    collection = db[collection_name]
+    
+    # Get original document for audit
+    original = await collection.find_one(query, {"_id": 0})
+    if not original:
+        return False
+    
+    # Get the entity ID field (varies by collection)
+    entity_id = original.get("sdc_id") or original.get("trainer_id") or \
+                original.get("manager_id") or original.get("infra_id") or \
+                original.get("job_role_id") or original.get("master_wo_id") or \
+                original.get("work_order_id") or str(original.get("_id", "unknown"))
+    
+    # Soft delete
+    result = await collection.update_one(
+        query,
+        {
+            "$set": {
+                "is_deleted": True,
+                "deleted_at": datetime.now(timezone.utc).isoformat(),
+                "deleted_by": user_id,
+                "deleted_by_email": user_email,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    if result.modified_count > 0:
+        # Create audit log
+        await create_audit_log(
+            action=AuditAction.SOFT_DELETE,
+            entity_type=collection_name,
+            entity_id=entity_id,
+            user_id=user_id,
+            user_email=user_email,
+            old_values={"is_deleted": False},
+            new_values={"is_deleted": True}
+        )
+        return True
+    return False
+
+async def restore_document(
+    collection_name: str,
+    query: dict,
+    user_id: str,
+    user_email: str
+) -> bool:
+    """Restore a soft-deleted document"""
+    collection = db[collection_name]
+    
+    # Get original document
+    original = await collection.find_one({**query, "is_deleted": True}, {"_id": 0})
+    if not original:
+        return False
+    
+    entity_id = original.get("sdc_id") or original.get("trainer_id") or \
+                original.get("manager_id") or original.get("infra_id") or \
+                original.get("job_role_id") or original.get("master_wo_id") or \
+                original.get("work_order_id") or "unknown"
+    
+    # Restore
+    result = await collection.update_one(
+        {**query, "is_deleted": True},
+        {
+            "$set": {
+                "is_deleted": False,
+                "restored_at": datetime.now(timezone.utc).isoformat(),
+                "restored_by": user_id,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$unset": {
+                "deleted_at": "",
+                "deleted_by": "",
+                "deleted_by_email": ""
+            }
+        }
+    )
+    
+    if result.modified_count > 0:
+        await create_audit_log(
+            action=AuditAction.RESTORE,
+            entity_type=collection_name,
+            entity_id=entity_id,
+            user_id=user_id,
+            user_email=user_email,
+            old_values={"is_deleted": True},
+            new_values={"is_deleted": False}
+        )
+        return True
+    return False
+
+# ==================== DUPLICATE DETECTION ====================
+async def check_duplicate(
+    collection_name: str,
+    field: str,
+    value: str,
+    exclude_id: str = None,
+    id_field: str = None
+) -> dict:
+    """Check for duplicate values in a collection"""
+    collection = db[collection_name]
+    query = {field: value, "is_deleted": {"$ne": True}}
+    
+    if exclude_id and id_field:
+        query[id_field] = {"$ne": exclude_id}
+    
+    existing = await collection.find_one(query, {"_id": 0})
+    if existing:
+        return {
+            "is_duplicate": True,
+            "existing_record": existing,
+            "field": field,
+            "value": value
+        }
+    return {"is_duplicate": False}
+
 # ==================== TRAINING ROADMAP STAGES ====================
 TRAINING_STAGES = [
     {"stage_id": "mobilization", "name": "Mobilization", "order": 1, "description": "Finding students"},
