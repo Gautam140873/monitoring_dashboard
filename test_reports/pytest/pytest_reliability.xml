@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="14" skipped="2" tests="19" time="1.433" timestamp="2026-02-18T08:44:36.760713+00:00" hostname="agent-env-bd04dc77-c5bb-43ff-b387-dbfadcda80f0"><testcase classname="backend.tests.test_reliability_features.TestBackendHealth" name="test_backend_starts_without_errors" time="0.257"><failure message="AssertionError: Backend not accessible: 401&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:33: in test_backend_starts_without_errors
+    assert response.status_code == 200, f"Backend not accessible: {response.status_code}"
+E   AssertionError: Backend not accessible: 401
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestBackendHealth" name="test_auth_returns_user_with_role" time="0.048"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:39: in test_auth_returns_user_with_role
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestAuditLogsEndpoint" name="test_get_audit_logs_requires_auth" time="0.109" /><testcase classname="backend.tests.test_reliability_features.TestAuditLogsEndpoint" name="test_get_audit_logs_success" time="0.058"><failure message="AssertionError: Expected 200, got 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:58: in test_get_audit_logs_success
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 200, got 401: {"detail":"Invalid session"}
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestAuditLogsEndpoint" name="test_get_audit_logs_with_filters" time="0.045"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:73: in test_get_audit_logs_with_filters
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestDeletedItemsEndpoint" name="test_get_deleted_items_requires_auth" time="0.119" /><testcase classname="backend.tests.test_reliability_features.TestDeletedItemsEndpoint" name="test_get_deleted_items_success" time="0.045"><failure message="AssertionError: Expected 200, got 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:100: in test_get_deleted_items_success
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 200, got 401: {"detail":"Invalid session"}
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestDeletedItemsEndpoint" name="test_get_deleted_items_with_entity_type_filter" time="0.048"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:122: in test_get_deleted_items_with_entity_type_filter
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestRestoreDeletedItem" name="test_restore_invalid_entity_type" time="0.042"><failure message="AssertionError: Expected 400, got 401&#10;assert 401 == 400&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:132: in test_restore_invalid_entity_type
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+E   AssertionError: Expected 400, got 401
+E   assert 401 == 400
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestRestoreDeletedItem" name="test_restore_nonexistent_item" time="0.046"><failure message="AssertionError: Expected 404, got 401&#10;assert 401 == 404&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:138: in test_restore_nonexistent_item
+    assert response.status_code == 404, f"Expected 404, got {response.status_code}"
+E   AssertionError: Expected 404, got 401
+E   assert 401 == 404
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestDuplicateCheckEndpoint" name="test_duplicate_check_requires_auth" time="0.091" /><testcase classname="backend.tests.test_reliability_features.TestDuplicateCheckEndpoint" name="test_duplicate_check_success" time="0.046"><failure message="AssertionError: Expected 200, got 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:162: in test_duplicate_check_success
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 200, got 401: {"detail":"Invalid session"}
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestDuplicateCheckEndpoint" name="test_duplicate_check_invalid_collection" time="0.045"><failure message="AssertionError: Expected 400, got 401&#10;assert 401 == 400&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:180: in test_duplicate_check_invalid_collection
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+E   AssertionError: Expected 400, got 401
+E   assert 401 == 400
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestSoftDeleteSDC" name="test_delete_sdc_returns_recovery_info" time="0.051"><skipped type="pytest.skip" message="Could not create test SDC: {&quot;detail&quot;:&quot;Invalid session&quot;}">/app/backend/tests/test_reliability_features.py:206: Could not create test SDC: {"detail":"Invalid session"}</skipped></testcase><testcase classname="backend.tests.test_reliability_features.TestSoftDeleteJobRole" name="test_delete_job_role_returns_recovery_info" time="0.050"><skipped type="pytest.skip" message="Could not create test job role: {&quot;detail&quot;:&quot;Invalid session&quot;}">/app/backend/tests/test_reliability_features.py:240: Could not create test job role: {"detail":"Invalid session"}</skipped></testcase><testcase classname="backend.tests.test_reliability_features.TestRBACPermissions" name="test_users_endpoint_requires_ho_role" time="0.046"><failure message="AssertionError: HO user should access /api/users: 401&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:264: in test_users_endpoint_requires_ho_role
+    assert response.status_code == 200, f"HO user should access /api/users: {response.status_code}"
+E   AssertionError: HO user should access /api/users: 401
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestRBACPermissions" name="test_audit_logs_requires_ho_role" time="0.046"><failure message="AssertionError: HO user should access audit logs: 401&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:270: in test_audit_logs_requires_ho_role
+    assert response.status_code == 200, f"HO user should access audit logs: {response.status_code}"
+E   AssertionError: HO user should access audit logs: 401
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestRBACPermissions" name="test_deleted_items_requires_ho_role" time="0.052"><failure message="AssertionError: HO user should access deleted items: 401&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_reliability_features.py:276: in test_deleted_items_requires_ho_role
+    assert response.status_code == 200, f"HO user should access deleted items: {response.status_code}"
+E   AssertionError: HO user should access deleted items: 401
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_reliability_features.TestAuditLogCreation" name="test_role_update_creates_audit_log" time="0.045"><failure message="KeyError: 'total'">backend/tests/test_reliability_features.py:287: in test_role_update_creates_audit_log
+    initial_count = initial_response.json()["total"]
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'total'</failure></testcase></testsuite></testsuites>
