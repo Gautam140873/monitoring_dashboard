@@ -924,11 +924,11 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
               <Label>Select Job Roles ({selectedJobRoles.length}/{formData.num_job_roles})</Label>
               <Select 
                 onValueChange={(value) => {
-                  console.log("Selected job role:", value);
-                  addJobRole(value);
+                  if (value) {
+                    addJobRole(value);
+                  }
                 }}
                 disabled={selectedJobRoles.length >= formData.num_job_roles}
-                value=""
               >
                 <SelectTrigger className="mt-1" data-testid="job-role-select">
                   <SelectValue placeholder={
