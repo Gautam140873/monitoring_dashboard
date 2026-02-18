@@ -145,6 +145,42 @@ DASHBOARD / SUMMARY REPORT
 - `POST /api/master/work-orders/{id}/sdcs` - Create SDC from Master
 - `GET /api/master/summary` - Aggregated summary
 
+### Resource Masters ✅ (NEW)
+
+**Purpose:** Pre-defined data for dropdown selection, with availability tracking
+
+**1. Trainers Master**
+- Name, Email, Phone, Qualification
+- Specialization (Job Role codes they can train)
+- Experience, Certifications
+- Status: `available` | `assigned` | `on_leave`
+- Auto-released when training completed
+
+**2. Center Managers Master**
+- Name, Email, Phone
+- Qualification, Experience
+- Status: `available` | `assigned`
+
+**3. SDC Infrastructure Master**
+- Center Name, Code, District
+- Full Address (line1, line2, city, state, pincode)
+- Capacity, Classrooms, Computer Labs
+- Facilities (projector, AC, library)
+- Status: `available` | `in_use` | `maintenance`
+
+**API Endpoints:**
+- `GET /api/resources/trainers` - List all trainers
+- `GET /api/resources/trainers/available` - Available for dropdown
+- `POST /api/resources/trainers/{id}/assign` - Assign to SDC
+- `POST /api/resources/trainers/{id}/release` - Release after training
+- Same pattern for `/managers` and `/infrastructure`
+- `GET /api/resources/summary` - Overview of all resources
+
+**Sample Data Created:**
+- 2 Trainers: Rajesh Kumar, Priya Sharma
+- 2 Managers: Amit Verma, Sunita Devi
+- 2 SDC Centers: Jaipur Main, Udaipur
+
 ---
 
 ## 🚧 PLANNED: Master Data Enhancement (Pending - To Resume)
