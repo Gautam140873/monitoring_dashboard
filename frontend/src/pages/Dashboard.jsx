@@ -173,16 +173,23 @@ export default function Dashboard({ user }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {user?.role === "ho" && (
+                  <>
+                    <DropdownMenuItem onClick={() => navigate("/master-data")} data-testid="master-data-link">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Master Data
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/users")} data-testid="users-link">
+                      <Users className="w-4 h-4 mr-2" />
+                      User Management
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem onClick={() => navigate("/settings")} data-testid="settings-link">
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
                 </DropdownMenuItem>
-                {user?.role === "ho" && (
-                  <DropdownMenuItem onClick={() => navigate("/users")} data-testid="users-link">
-                    <Users className="w-4 h-4 mr-2" />
-                    User Management
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} data-testid="logout-btn">
                   <LogOut className="w-4 h-4 mr-2" />
