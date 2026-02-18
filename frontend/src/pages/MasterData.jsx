@@ -668,6 +668,7 @@ export default function MasterData({ user }) {
                     <TableRow>
                       <TableHead className="uppercase text-xs font-bold">Name</TableHead>
                       <TableHead className="uppercase text-xs font-bold">Contact</TableHead>
+                      <TableHead className="uppercase text-xs font-bold">Domain</TableHead>
                       <TableHead className="uppercase text-xs font-bold">Specialization</TableHead>
                       <TableHead className="uppercase text-xs font-bold">Experience</TableHead>
                       <TableHead className="uppercase text-xs font-bold">Status</TableHead>
@@ -684,6 +685,10 @@ export default function MasterData({ user }) {
                         <TableCell>
                           <div className="text-sm">{trainer.phone}</div>
                           <div className="text-xs text-muted-foreground">{trainer.email}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">{trainer.domain || 'General'}</Badge>
+                          {trainer.nsqf_level && <div className="text-xs text-muted-foreground mt-1">NSQF {trainer.nsqf_level}</div>}
                         </TableCell>
                         <TableCell className="font-mono text-sm">{trainer.specialization}</TableCell>
                         <TableCell>{trainer.experience_years} years</TableCell>
