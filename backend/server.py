@@ -204,6 +204,85 @@ class MasterWorkOrder(BaseModel):
     created_by: Optional[str] = None
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+# ==================== RESOURCE MASTER MODELS ====================
+
+class TrainerMaster(BaseModel):
+    """Master Data - Trainer Details"""
+    model_config = ConfigDict(extra="ignore")
+    trainer_id: str = Field(default_factory=lambda: f"tr_{uuid.uuid4().hex[:8]}")
+    name: str
+    email: str
+    phone: str
+    qualification: str
+    specialization: str  # Job role codes they can train
+    experience_years: int = 0
+    certifications: List[str] = []
+    # Availability
+    status: str = "available"  # available, assigned, on_leave
+    assigned_sdc_id: Optional[str] = None
+    assigned_work_order_id: Optional[str] = None
+    # Address
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    # Metadata
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class CenterManagerMaster(BaseModel):
+    """Master Data - Center Manager Details"""
+    model_config = ConfigDict(extra="ignore")
+    manager_id: str = Field(default_factory=lambda: f"cm_{uuid.uuid4().hex[:8]}")
+    name: str
+    email: str
+    phone: str
+    qualification: Optional[str] = None
+    experience_years: int = 0
+    # Availability
+    status: str = "available"  # available, assigned
+    assigned_sdc_id: Optional[str] = None
+    # Address
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    # Metadata
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class SDCInfrastructureMaster(BaseModel):
+    """Master Data - SDC/Center Infrastructure Details"""
+    model_config = ConfigDict(extra="ignore")
+    infra_id: str = Field(default_factory=lambda: f"infra_{uuid.uuid4().hex[:8]}")
+    center_name: str
+    center_code: str
+    district: str
+    # Address
+    address_line1: str
+    address_line2: Optional[str] = None
+    city: str
+    state: str
+    pincode: str
+    # Contact
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    # Infrastructure Details
+    total_capacity: int = 30  # Max students
+    num_classrooms: int = 1
+    num_computer_labs: int = 0
+    has_projector: bool = True
+    has_ac: bool = False
+    has_library: bool = False
+    other_facilities: List[str] = []
+    # Availability
+    status: str = "available"  # available, in_use, maintenance
+    assigned_work_order_id: Optional[str] = None
+    # Metadata
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 # ==================== REQUEST/RESPONSE MODELS ====================
 
 class SessionRequest(BaseModel):
