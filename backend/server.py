@@ -255,6 +255,45 @@ class UserRoleUpdate(BaseModel):
     role: str
     assigned_sdc_id: Optional[str] = None
 
+# ==================== MASTER DATA REQUEST MODELS ====================
+
+class JobRoleMasterCreate(BaseModel):
+    """Create a new Job Role in Master Data"""
+    job_role_code: str
+    job_role_name: str
+    category: str  # "A", "B", or "custom"
+    rate_per_hour: Optional[float] = None  # Auto-set if category is A or B
+    total_training_hours: int
+    awarding_body: str
+    scheme_name: str
+    default_daily_hours: int = 8
+    default_batch_size: int = 30
+
+class JobRoleMasterUpdate(BaseModel):
+    """Update Job Role in Master Data"""
+    job_role_name: Optional[str] = None
+    category: Optional[str] = None
+    rate_per_hour: Optional[float] = None
+    total_training_hours: Optional[int] = None
+    awarding_body: Optional[str] = None
+    scheme_name: Optional[str] = None
+    default_daily_hours: Optional[int] = None
+    default_batch_size: Optional[int] = None
+    is_active: Optional[bool] = None
+
+class MasterWorkOrderCreate(BaseModel):
+    """Create Work Order from Master Data"""
+    work_order_number: str
+    job_role_id: str  # Reference to JobRoleMaster
+
+class SDCFromMasterCreate(BaseModel):
+    """Create SDC from Master Work Order"""
+    master_wo_id: str  # Reference to MasterWorkOrder
+    location: str  # SDC location/name
+    target_students: int  # Target allocation for this SDC
+    daily_hours: int = 8  # 4, 6, or 8
+    manager_email: Optional[str] = None
+
 # ==================== AUTH HELPERS ====================
 
 async def get_current_user(request: Request) -> User:
