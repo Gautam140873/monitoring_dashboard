@@ -176,6 +176,6 @@ WORK ORDER (Umbrella)
 ---
 
 ## Next Action Items
-1. 🔴 **P0**: Implement Master Data Enhancement (structure above)
+1. 🟡 **P1**: Fine-tune SDC data flow and batch management within SDCs
 2. 🟡 **P1**: Verify Gmail API end-to-end flow
 3. 🟢 **P2**: Holiday Management CRUD UI in Settings
