@@ -796,11 +796,16 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess, onCancel }) => {
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>Create Master Work Order</DialogTitle>
-        <DialogDescription>
-          Step {step} of 3: {step === 1 ? "Basic Information" : step === 2 ? "Job Roles & Targets" : "SDC Districts"}
-        </DialogDescription>
+      <DialogHeader className="flex flex-row items-start justify-between">
+        <div>
+          <DialogTitle>Create Master Work Order</DialogTitle>
+          <DialogDescription>
+            Step {step} of 3: {step === 1 ? "Basic Information" : step === 2 ? "Job Roles & Targets" : "SDC Districts"}
+          </DialogDescription>
+        </div>
+        <Button variant="ghost" size="icon" onClick={onCancel} className="h-8 w-8" type="button">
+          <X className="w-4 h-4" />
+        </Button>
       </DialogHeader>
 
       {/* Progress Indicator */}
