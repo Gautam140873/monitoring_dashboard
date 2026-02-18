@@ -670,7 +670,7 @@ const JobRoleForm = ({ editData, onSuccess }) => {
 };
 
 // Master Work Order Form Component - Step-by-step with target validation
-const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
+const MasterWorkOrderForm = ({ jobRoles, onSuccess, onCancel }) => {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1); // Step 1: Basic info, Step 2: Job roles, Step 3: Districts
   const [selectKey, setSelectKey] = useState(0); // Key to force Select remount after selection
