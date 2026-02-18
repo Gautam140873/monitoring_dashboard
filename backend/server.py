@@ -178,22 +178,27 @@ class JobRoleMaster(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class MasterWorkOrder(BaseModel):
-    """Master Data - Work Order Template (HO Only)"""
+    """Master Data - Work Order with Multiple Job Roles and SDCs (HO Only)"""
     model_config = ConfigDict(extra="ignore")
     master_wo_id: str = Field(default_factory=lambda: f"mwo_{uuid.uuid4().hex[:8]}")
     work_order_number: str  # e.g., WO/2025/001
-    job_role_id: str  # Reference to JobRoleMaster
-    # Denormalized from JobRoleMaster for easy access
-    job_role_code: str
-    job_role_name: str
-    category: str
-    rate_per_hour: float
-    total_training_hours: int
-    awarding_body: str
-    scheme_name: str
-    # Work Order specific
-    total_target_students: int = 0  # Sum of all SDC targets
-    total_contract_value: float = 0  # Auto-calculated
+    
+    # Multiple Job Roles with individual targets
+    job_roles: List[dict] = []  # [{job_role_id, job_role_code, job_role_name, category, rate_per_hour, hours, target}]
+    
+    # Training Targets
+    total_training_target: int = 0  # Total target across all job roles
+    
+    # SDC Configuration
+    num_sdcs: int = 0  # Number of SDCs/Districts
+    sdc_districts: List[dict] = []  # [{district_name, sdc_name, target_allocation}]
+    
+    # Aggregated values (auto-calculated)
+    total_contract_value: float = 0
+    
+    # Metadata
+    awarding_body: str = ""
+    scheme_name: str = ""
     status: str = "active"  # active, completed, cancelled
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_by: Optional[str] = None
