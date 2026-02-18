@@ -16,16 +16,17 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 
 ### Backend (FastAPI + MongoDB)
 - **Authentication**: Emergent Google OAuth with session-based auth
-- **Data Models**: Users, SDCs, WorkOrders, TrainingRoadmaps, Invoices, Holidays, Alerts
+- **Data Models**: Users, SDCs, WorkOrders, TrainingRoadmaps, Invoices, Holidays, Alerts, ResourceMasters
 - **Core Features**:
   - Auto-SDC creation when new location is added via Work Order
   - 7-stage Training Roadmap (Mobilization → Placement)
   - Holiday-aware end date calculation (skips Sundays + holidays)
   - Variance tracking (Order vs Billed)
   - Payment Trigger (marks stages as PAID when invoice is fully paid)
+  - Resource availability tracking and auto-release
 
 ### Frontend (React + TailwindCSS + Shadcn/UI)
-- **Pages**: Landing, Dashboard, SDC Detail, Financial Control, Settings, User Management
+- **Pages**: Landing, Dashboard, SDC Detail, Financial Control, Settings, Master Data
 - **Design**: Swiss/High-Contrast style with Chivo + Inter fonts
 
 ## What's Been Implemented (Feb 2026)
@@ -45,21 +46,47 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 
 ### New Features (Phase 2) ✅
 - [x] Batch Progress Update UI - Update multiple roadmap stages at once
-- [x] CSV Export functionality:
-  - Financial Summary export
-  - Work Orders export  
-  - Training Progress export
-  - Invoices export
+- [x] CSV Export functionality (Financial Summary, Work Orders, Training Progress, Invoices)
 
 ### New Features (Phase 3) ✅
 - [x] Gmail API Integration for Risk Summary emails
-  - OAuth2 flow for Gmail authorization
-  - HTML formatted Risk Summary emails
-  - Commercial Health metrics in email
-  - All active alerts included
-  - Email sending history log
 
-### Training Roadmap Stages
+### Master Data System ✅ (Feb 18, 2026)
+- [x] Job Role Master with category-based rates (Cat A: ₹46/hr, Cat B: ₹42/hr)
+- [x] Master Work Orders with multiple job roles and SDC districts
+- [x] SDC creation from Master Work Order with auto-calculated contract values
+- [x] SDC naming convention: SDC_DISTRICT or SDC_DISTRICT1, SDC_DISTRICT2
+
+### Resource Masters ✅ (Feb 18, 2026)
+- [x] **Trainers Master**: Name, Email, Qualification, Specialization, Status tracking
+- [x] **Center Managers Master**: Name, Email, Phone, Status tracking
+- [x] **SDC Infrastructure Master**: Center details, Address, Capacity, Facilities, Status tracking
+- [x] **Resource Selection in SDC Creation**: Dropdown to select available infrastructure and managers
+- [x] **Address Auto-fill**: When infrastructure is selected, address fields auto-populate
+- [x] **Resource Assignment**: Resources marked as `in_use` / `assigned` when SDC is created
+- [x] **Resource Release**: "Complete & Release Resources" button releases all assigned resources
+- [x] **Dialog Auto-close Fix**: Dialogs no longer close when clicking outside
+
+### New API Endpoints (Feb 18, 2026)
+- `POST /api/master/work-orders/{id}/complete` - Complete work order and release all resources
+- `POST /api/resources/trainers/{id}/assign` - Assign trainer to SDC
+- `POST /api/resources/managers/{id}/assign` - Assign manager to SDC  
+- `POST /api/resources/infrastructure/{id}/assign` - Assign center to work order
+- `POST /api/resources/*/release` - Release resources (mark as available)
+- `GET /api/resources/summary` - Overview with available/assigned counts
+
+### Data Flow
+```
+JOB ROLE MASTER (Define rates & hours)
+    ↓ Select multiple job roles
+MASTER WORK ORDER (Define targets & districts)
+    ↓ Create SDCs (select resources from Resource Masters)
+SDC (With assigned resources)
+    ↓ Training complete
+WORK ORDER COMPLETION (Auto-release all resources)
+```
+
+## Training Roadmap Stages
 1. Mobilization (Finding students)
 2. Dress Distribution
 3. Study Material Distribution
@@ -71,169 +98,43 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 ## Prioritized Backlog
 
 ### P0 (Critical) - COMPLETED ✅
-- [x] Gmail API integration for HO Risk Summary emails
+- [x] SDC Form Integration with Resource Masters
+- [x] Resource Availability and Locking Logic
+- [x] Dialog auto-close fix
 
 ### P1 (High Priority)
-- [ ] Google Sheets bi-directional sync (if needed)
-- [ ] Real-time dashboard updates (WebSocket)
+- [ ] Trainer dropdown in SDC form (same pattern as Manager)
+- [ ] Holiday Management CRUD UI in Settings
+- [ ] Gmail API end-to-end verification
 - [ ] PDF invoice generation
-- [ ] Audit log for all changes
 
 ### P2 (Nice to Have)
+- [ ] WhatsApp/SMS notifications for SDC managers
+- [ ] Audit log for all changes
+- [ ] Real-time dashboard updates (WebSocket)
 - [ ] Mobile-responsive improvements
 - [ ] Dark mode toggle
-- [ ] Advanced filtering and search
-- [ ] Historical trend charts
-- [ ] Multi-language support
-- [ ] WhatsApp/SMS notifications for local managers
 
 ## Technical Notes
-- Backend API version: 2.0.0
-- MongoDB collections: users, user_sessions, sdcs, work_orders, training_roadmaps, invoices, holidays, alerts
+- Backend API version: 2.1.0
+- MongoDB collections: users, user_sessions, sdcs, work_orders, training_roadmaps, invoices, holidays, alerts, job_role_master, master_work_orders, trainers, center_managers, sdc_infrastructure
 - All backend routes prefixed with /api
 - Session token stored in httpOnly cookie
 
-## Recent Changes (Feb 17-18, 2026)
+## Sample Data
+- **Trainers**: Rajesh Kumar, Priya Sharma (available)
+- **Managers**: Amit Verma, Sunita Devi (available)
+- **SDC Centers**: Jaipur Main, Udaipur (available)
+- **Master Work Orders**: 4 orders (WO/2025/PMKVY/001, 002, 003, WO/RSLDC/25-26/001)
 
-### Bug Fixes ✅
-- [x] Fixed SDC detail page 403 error - User `gautam.hinger@gmail.com` was changed from 'sdc' role to 'ho' role
-- [x] Added "New Work Order" form dialog to Dashboard page
-
-### Master Data System ✅ (UPDATED)
-
-**New Structure:**
-```
-WORK ORDER (Master)
-├── Work Order Number: WO/2025/PMKVY/002
-├── Total Training Target: 120 (flexible allocation)
-├── Job Roles (Multiple):
-│   ├── CSC/Q0801 - Field Technician: 90 students (Cat A, ₹46/hr)
-│   └── ELE/Q4601 - Solar Technician: 30 students (Cat B, ₹42/hr)
-├── SDC Districts:
-│   ├── Udaipur (2 SDCs) → SDC_UDAIPUR1, SDC_UDAIPUR2
-│   └── Jaipur (1 SDC) → SDC_JAIPUR
-└── Total Contract Value: ₹20,34,000
-```
-
-**Features:**
-- [x] Multiple Job Roles per Work Order with individual targets
-- [x] Flexible target allocation (e.g., 120 total split as 90+30)
-- [x] Multiple SDC districts with configurable count
-- [x] SDC naming convention: SDC_DISTRICT or SDC_DISTRICT1, SDC_DISTRICT2
-- [x] Address details captured at SDC level (not master)
-- [x] Auto-calculated contract values: Students × Hours × Rate
-
-**Financial Calculation:**
-- Job Role Value = Target × Hours × Rate/hr
-- Work Order Value = Sum of all Job Role Values
-- SDC Value = Students × Job Role Hours × Rate
-
-### Data Flow
-```
-JOB ROLE MASTER (Define rates & hours)
-    ↓ Select multiple job roles
-MASTER WORK ORDER (Define targets & districts)
-    ↓ Create SDCs from districts  
-SDC (With address details)
-    ↓ View in
-DASHBOARD / SUMMARY REPORT
-```
-
-### New API Endpoints
-- `GET/POST /api/master/job-roles` - Job Role CRUD
-- `GET/POST /api/master/work-orders` - Master Work Order CRUD
-- `POST /api/master/work-orders/{id}/sdcs` - Create SDC from Master
-- `GET /api/master/summary` - Aggregated summary
-
-### Resource Masters ✅ (NEW)
-
-**Purpose:** Pre-defined data for dropdown selection, with availability tracking
-
-**1. Trainers Master**
-- Name, Email, Phone, Qualification
-- Specialization (Job Role codes they can train)
-- Experience, Certifications
-- Status: `available` | `assigned` | `on_leave`
-- Auto-released when training completed
-
-**2. Center Managers Master**
-- Name, Email, Phone
-- Qualification, Experience
-- Status: `available` | `assigned`
-
-**3. SDC Infrastructure Master**
-- Center Name, Code, District
-- Full Address (line1, line2, city, state, pincode)
-- Capacity, Classrooms, Computer Labs
-- Facilities (projector, AC, library)
-- Status: `available` | `in_use` | `maintenance`
-
-**API Endpoints:**
-- `GET /api/resources/trainers` - List all trainers
-- `GET /api/resources/trainers/available` - Available for dropdown
-- `POST /api/resources/trainers/{id}/assign` - Assign to SDC
-- `POST /api/resources/trainers/{id}/release` - Release after training
-- Same pattern for `/managers` and `/infrastructure`
-- `GET /api/resources/summary` - Overview of all resources
-
-**Sample Data Created:**
-- 2 Trainers: Rajesh Kumar, Priya Sharma
-- 2 Managers: Amit Verma, Sunita Devi
-- 2 SDC Centers: Jaipur Main, Udaipur
-
----
-
-## 🚧 PLANNED: Master Data Enhancement (Pending - To Resume)
-
-### New Tiered Structure
-```
-WORK ORDER (Umbrella)
-├── Job Role Category: Cat A (₹46/hr) | Cat B (₹42/hr) | Custom
-├── Rate Per Hour: Auto-populated or manual override
-├── Total Course Duration: e.g., 400 hours
-│
-├── SDC 1 (Linked to Work Order)
-│   ├── Target Allocation: Total candidates for center
-│   ├── Batch 1: 30 students, 8hr/day → End Date, Batch Value
-│   ├── Batch 2: 30 students, 6hr/day → End Date, Batch Value
-│   └── SDC Total = Sum of Batch Values
-│
-└── WORK ORDER TOTAL = Sum of all SDC Values
-```
-
-### Financial Calculation Logic
-- **Batch Value** = Candidates × Course Duration × Rate Per Hour
-- **SDC Total** = Sum of all Batch Values within SDC
-- **Work Order Total** = Sum of all SDC Values
-
-### Job Role Category Rates
-| Category | Rate Per Hour |
-|----------|---------------|
-| Cat A / Cat 1 | ₹46/hr |
-| Cat B / Cat 2 | ₹42/hr |
-| Custom | Manual entry |
-
-### New Data Fields Required
-| Feature | Controlled At | Input Type | Impact |
-|---------|--------------|------------|--------|
-| Rate Per Hour | Work Order | Dropdown (Cat A/B) | Financial multiplier |
-| Total Duration | Work Order | Manual | Timeline baseline |
-| Target Allocation | SDC Level | Manual | Center student count |
-| Daily Hours | Batch Level | Dropdown (4,6,8) | End Date calculation |
-| Student Count | Batch Level | Manual (25-30) | Batch Value calculation |
-
-### Implementation Phases (To Do)
-- **Phase 1**: Backend schema updates (new Batch model, Work Order fields)
-- **Phase 2**: API endpoints for SDC/Batch management under Work Orders
-- **Phase 3**: Frontend forms and financial summary dashboard
-
-### Open Questions for Next Session
-1. Migration strategy for existing 7 work orders?
-2. Should 7-stage roadmap be tracked at Batch level?
-
----
+## Files of Reference
+- `/app/backend/server.py` - Main backend with all API endpoints
+- `/app/frontend/src/pages/MasterData.jsx` - Master Data management UI
+- `/app/frontend/src/pages/Dashboard.jsx` - Main dashboard
+- `/app/frontend/src/App.js` - App routes
 
 ## Next Action Items
-1. 🟡 **P1**: Fine-tune SDC data flow and batch management within SDCs
-2. 🟡 **P1**: Verify Gmail API end-to-end flow
-3. 🟢 **P2**: Holiday Management CRUD UI in Settings
+1. 🟡 **P1**: Add Trainer selection dropdown to SDC creation form
+2. 🟡 **P1**: Holiday Management CRUD UI in Settings page
+3. 🟡 **P1**: Test Gmail API end-to-end flow
+4. 🟢 **P2**: Refactor large files (server.py, MasterData.jsx) into modules
