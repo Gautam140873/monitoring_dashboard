@@ -157,6 +157,48 @@ class Alert(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     resolved: bool = False
 
+# ==================== MASTER DATA MODELS ====================
+
+class JobRoleMaster(BaseModel):
+    """Master Data - Job Role Configuration (HO Only)"""
+    model_config = ConfigDict(extra="ignore")
+    job_role_id: str = Field(default_factory=lambda: f"jr_{uuid.uuid4().hex[:8]}")
+    job_role_code: str  # e.g., CSC/Q0801
+    job_role_name: str  # e.g., Field Technician Computing
+    category: str  # "A", "B", or "custom"
+    rate_per_hour: float  # Cat A: 46, Cat B: 42, or custom
+    total_training_hours: int  # e.g., 400 hours
+    awarding_body: str  # e.g., NSDC
+    scheme_name: str  # e.g., PMKVY 4.0
+    default_daily_hours: int = 8  # 4, 6, or 8
+    default_batch_size: int = 30  # typical 25-30
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_by: Optional[str] = None
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class MasterWorkOrder(BaseModel):
+    """Master Data - Work Order Template (HO Only)"""
+    model_config = ConfigDict(extra="ignore")
+    master_wo_id: str = Field(default_factory=lambda: f"mwo_{uuid.uuid4().hex[:8]}")
+    work_order_number: str  # e.g., WO/2025/001
+    job_role_id: str  # Reference to JobRoleMaster
+    # Denormalized from JobRoleMaster for easy access
+    job_role_code: str
+    job_role_name: str
+    category: str
+    rate_per_hour: float
+    total_training_hours: int
+    awarding_body: str
+    scheme_name: str
+    # Work Order specific
+    total_target_students: int = 0  # Sum of all SDC targets
+    total_contract_value: float = 0  # Auto-calculated
+    status: str = "active"  # active, completed, cancelled
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_by: Optional[str] = None
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 # ==================== REQUEST/RESPONSE MODELS ====================
 
 class SessionRequest(BaseModel):
