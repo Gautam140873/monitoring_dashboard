@@ -1494,6 +1494,21 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess, onCancel }) => {
               )}
             </div>
 
+            {/* Validation Messages */}
+            {!canProceedToStep3 && selectedJobRoles.length > 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+                <strong>To proceed:</strong>
+                <ul className="list-disc list-inside mt-1">
+                  {selectedJobRoles.length < formData.num_job_roles && (
+                    <li>Select {formData.num_job_roles - selectedJobRoles.length} more job role(s) ({selectedJobRoles.length}/{formData.num_job_roles} selected)</li>
+                  )}
+                  {!isTargetFullyAllocated && (
+                    <li>Allocate targets to equal {formData.total_training_target} (currently: {allocatedTarget})</li>
+                  )}
+                </ul>
+              </div>
+            )}
+
             {/* Navigation */}
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => setStep(1)} className="flex-1">
