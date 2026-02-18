@@ -1587,6 +1587,11 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess, onCancel }) => {
 // SDC From Master Form Component
 const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [availableInfra, setAvailableInfra] = useState([]);
+  const [availableManagers, setAvailableManagers] = useState([]);
+  const [selectedInfra, setSelectedInfra] = useState(null);
+  const [selectedManager, setSelectedManager] = useState(null);
+  const [useExistingInfra, setUseExistingInfra] = useState(true);
   const [formData, setFormData] = useState({
     district_name: masterWO.sdc_districts?.[0]?.district_name || "",
     sdc_suffix: "",
@@ -1594,12 +1599,35 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
     target_students: 30,
     daily_hours: 8,
     manager_email: "",
+    infra_id: "",
     address_line1: "",
     address_line2: "",
     city: "",
     state: "",
     pincode: ""
   });
+
+  // Fetch available infrastructure and managers
+  useEffect(() => {
+    const fetchResources = async () => {
+      try {
+        const [infraRes, managersRes] = await Promise.all([
+          axios.get(`${API}/resources/infrastructure/available`),
+          axios.get(`${API}/resources/managers/available`)
+        ]);
+        setAvailableInfra(infraRes.data);
+        setAvailableManagers(managersRes.data);
+      } catch (error) {
+        console.error("Error fetching resources:", error);
+      }
+    };
+    fetchResources();
+  }, []);
+
+  // Filter infrastructure by selected district
+  const filteredInfra = availableInfra.filter(
+    infra => infra.district.toLowerCase() === formData.district_name.toLowerCase()
+  );
 
   const selectedJobRole = masterWO.job_roles?.find(jr => jr.job_role_id === formData.job_role_id);
   const contractValue = selectedJobRole 
@@ -1611,6 +1639,36 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
     ? `SDC_${formData.district_name.toUpperCase().replace(/\s/g, '_')}${formData.sdc_suffix || ''}`
     : '';
 
+  // Handle infrastructure selection
+  const handleInfraSelect = (infraId) => {
+    const infra = availableInfra.find(i => i.infra_id === infraId);
+    if (infra) {
+      setSelectedInfra(infra);
+      setFormData({
+        ...formData,
+        infra_id: infraId,
+        address_line1: infra.address_line1,
+        address_line2: infra.address_line2 || "",
+        city: infra.city,
+        state: infra.state,
+        pincode: infra.pincode,
+        target_students: Math.min(formData.target_students, infra.total_capacity)
+      });
+    }
+  };
+
+  // Handle manager selection
+  const handleManagerSelect = (managerId) => {
+    const manager = availableManagers.find(m => m.manager_id === managerId);
+    if (manager) {
+      setSelectedManager(manager);
+      setFormData({
+        ...formData,
+        manager_email: manager.email
+      });
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -1619,6 +1677,19 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
         master_wo_id: masterWO.master_wo_id,
         ...formData
       });
+      
+      // If infrastructure was selected, mark it as in_use
+      if (formData.infra_id) {
+        await axios.post(`${API}/resources/infrastructure/${formData.infra_id}/assign`, null, {
+          params: { work_order_id: masterWO.master_wo_id }
+        });
+      }
+      
+      // If manager was selected, mark as assigned
+      if (selectedManager) {
+        // We'll assign when SDC is fully created
+      }
+      
       toast.success(`SDC ${sdcNamePreview} created successfully!`);
       onSuccess();
     } catch (error) {
@@ -1634,7 +1705,7 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
       <DialogHeader>
         <DialogTitle>Create SDC for {masterWO.work_order_number}</DialogTitle>
         <DialogDescription>
-          Create an SDC from the defined districts. Address details can be added here.
+          Select from available resources or enter details manually
         </DialogDescription>
       </DialogHeader>
       <form onSubmit={handleSubmit} className="space-y-4 mt-4" data-testid="sdc-from-master-form">
@@ -1650,7 +1721,10 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>District *</Label>
-            <Select value={formData.district_name} onValueChange={(v) => setFormData({ ...formData, district_name: v })}>
+            <Select value={formData.district_name} onValueChange={(v) => {
+              setFormData({ ...formData, district_name: v, infra_id: "" });
+              setSelectedInfra(null);
+            }}>
               <SelectTrigger>
                 <SelectValue placeholder="Select district..." />
               </SelectTrigger>
@@ -1672,6 +1746,112 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
             />
             <p className="text-xs text-muted-foreground mt-1">Leave empty for single SDC</p>
           </div>
+        </div>
+
+        {/* Select from Resources */}
+        <div className="border border-border rounded-md p-4 bg-muted/30">
+          <div className="flex items-center justify-between mb-3">
+            <Label className="text-base font-medium flex items-center gap-2">
+              <Home className="w-4 h-4" />
+              Select Center from Resources
+            </Label>
+            <Badge variant="outline" className="text-xs">
+              {filteredInfra.length} available in {formData.district_name || "selected district"}
+            </Badge>
+          </div>
+          
+          {filteredInfra.length > 0 ? (
+            <Select value={formData.infra_id} onValueChange={handleInfraSelect}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select available center..." />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredInfra.map((infra) => (
+                  <SelectItem key={infra.infra_id} value={infra.infra_id}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{infra.center_name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {infra.center_code} • Capacity: {infra.total_capacity} • {infra.city}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-sm text-muted-foreground py-2">
+              {formData.district_name 
+                ? `No available centers in ${formData.district_name}. You can add manually below.`
+                : "Select a district first to see available centers."
+              }
+            </p>
+          )}
+
+          {selectedInfra && (
+            <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-md">
+              <div className="flex items-center gap-2 text-emerald-700 font-medium text-sm">
+                <CheckCircle className="w-4 h-4" />
+                Selected: {selectedInfra.center_name}
+              </div>
+              <div className="text-xs text-emerald-600 mt-1">
+                {selectedInfra.address_line1}, {selectedInfra.city} - {selectedInfra.pincode}
+                <br />
+                Capacity: {selectedInfra.total_capacity} students • 
+                {selectedInfra.num_classrooms} classroom{selectedInfra.num_classrooms > 1 ? 's' : ''}
+                {selectedInfra.has_projector && " • Projector"}
+                {selectedInfra.has_ac && " • AC"}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Select Center Manager from Resources */}
+        <div className="border border-border rounded-md p-4 bg-muted/30">
+          <div className="flex items-center justify-between mb-3">
+            <Label className="text-base font-medium flex items-center gap-2">
+              <UserCog className="w-4 h-4" />
+              Select Center Manager
+            </Label>
+            <Badge variant="outline" className="text-xs">
+              {availableManagers.length} available
+            </Badge>
+          </div>
+          
+          {availableManagers.length > 0 ? (
+            <Select onValueChange={handleManagerSelect}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select available manager..." />
+              </SelectTrigger>
+              <SelectContent>
+                {availableManagers.map((manager) => (
+                  <SelectItem key={manager.manager_id} value={manager.manager_id}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{manager.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {manager.phone} • {manager.city}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-sm text-muted-foreground py-2">
+              No available managers. Add managers in Resources tab.
+            </p>
+          )}
+
+          {selectedManager && (
+            <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-md">
+              <div className="flex items-center gap-2 text-purple-700 font-medium text-sm">
+                <CheckCircle className="w-4 h-4" />
+                Selected: {selectedManager.name}
+              </div>
+              <div className="text-xs text-purple-600 mt-1">
+                {selectedManager.email} • {selectedManager.phone}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Job Role Selection */}
@@ -1700,8 +1880,14 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
               value={formData.target_students}
               onChange={(e) => setFormData({ ...formData, target_students: parseInt(e.target.value) || 0 })}
               min="1"
+              max={selectedInfra?.total_capacity || 999}
               required
             />
+            {selectedInfra && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Max capacity: {selectedInfra.total_capacity}
+              </p>
+            )}
           </div>
           <div>
             <Label>Daily Session Hours</Label>
@@ -1718,50 +1904,54 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
           </div>
         </div>
 
-        {/* Manager Email */}
-        <div>
-          <Label>Manager Email</Label>
-          <Input 
-            type="email"
-            value={formData.manager_email}
-            onChange={(e) => setFormData({ ...formData, manager_email: e.target.value })}
-            placeholder="manager@example.com"
-          />
-        </div>
-
-        {/* Address Details */}
-        <div className="border border-border rounded-md p-4">
-          <Label className="text-base font-medium mb-2 block">Address Details (Optional)</Label>
-          <div className="space-y-3">
-            <Input 
-              value={formData.address_line1}
-              onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })}
-              placeholder="Address Line 1"
-            />
-            <Input 
-              value={formData.address_line2}
-              onChange={(e) => setFormData({ ...formData, address_line2: e.target.value })}
-              placeholder="Address Line 2"
-            />
-            <div className="grid grid-cols-3 gap-2">
+        {/* Manual Address Entry (if no infra selected) */}
+        {!selectedInfra && (
+          <div className="border border-border rounded-md p-4">
+            <Label className="text-base font-medium mb-2 block">Address Details (Manual Entry)</Label>
+            <div className="space-y-3">
               <Input 
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                placeholder="City"
+                value={formData.address_line1}
+                onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })}
+                placeholder="Address Line 1"
               />
               <Input 
-                value={formData.state}
-                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                placeholder="State"
+                value={formData.address_line2}
+                onChange={(e) => setFormData({ ...formData, address_line2: e.target.value })}
+                placeholder="Address Line 2"
               />
-              <Input 
-                value={formData.pincode}
-                onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
-                placeholder="Pincode"
-              />
+              <div className="grid grid-cols-3 gap-2">
+                <Input 
+                  value={formData.city}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  placeholder="City"
+                />
+                <Input 
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                  placeholder="State"
+                />
+                <Input 
+                  value={formData.pincode}
+                  onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                  placeholder="Pincode"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Manager Email (if no manager selected) */}
+        {!selectedManager && (
+          <div>
+            <Label>Manager Email (Manual Entry)</Label>
+            <Input 
+              type="email"
+              value={formData.manager_email}
+              onChange={(e) => setFormData({ ...formData, manager_email: e.target.value })}
+              placeholder="manager@example.com"
+            />
+          </div>
+        )}
 
         {/* Contract Value */}
         <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-md">
@@ -1779,6 +1969,10 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
         <Button type="submit" className="w-full" disabled={loading || !formData.district_name || !formData.job_role_id}>
           {loading ? "Creating..." : "Create SDC"}
         </Button>
+      </form>
+    </>
+  );
+};
       </form>
     </>
   );
