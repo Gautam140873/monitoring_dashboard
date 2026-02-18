@@ -779,10 +779,33 @@ async def get_current_user(request: Request) -> User:
     return User(**user_doc)
 
 async def require_ho_role(user: User = Depends(get_current_user)) -> User:
-    """Require HO (Head Office) role"""
-    if user.role != "ho":
-        raise HTTPException(status_code=403, detail="HO access required")
+    """Require HO (Head Office) or Admin role"""
+    if user.role not in ["ho", "admin"]:
+        raise HTTPException(status_code=403, detail="HO or Admin access required")
     return user
+
+async def require_admin_role(user: User = Depends(get_current_user)) -> User:
+    """Require Admin role only"""
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+async def require_manager_or_above(user: User = Depends(get_current_user)) -> User:
+    """Require Manager, HO, or Admin role"""
+    if user.role not in ["manager", "ho", "admin"]:
+        raise HTTPException(status_code=403, detail="Manager or higher access required")
+    return user
+
+def require_permission(permission: str):
+    """Decorator factory to require specific permission"""
+    async def permission_checker(user: User = Depends(get_current_user)) -> User:
+        if not has_permission(user.role, permission):
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Permission denied: {permission} required"
+            )
+        return user
+    return permission_checker
 
 # ==================== DATE CALCULATION ====================
 
