@@ -3540,6 +3540,76 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==================== DATABASE INITIALIZATION ====================
+
+@app.on_event("startup")
+async def startup_db_client():
+    """Initialize database indexes and collections on startup"""
+    try:
+        # Create indexes for performance optimization
+        # Users collection
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("user_id", unique=True)
+        await db.users.create_index("role")
+        
+        # SDCs collection
+        await db.sdcs.create_index("sdc_id", unique=True)
+        await db.sdcs.create_index("is_deleted")
+        await db.sdcs.create_index([("location", 1), ("is_deleted", 1)])
+        
+        # Work Orders
+        await db.work_orders.create_index("work_order_id", unique=True)
+        await db.work_orders.create_index("sdc_id")
+        await db.work_orders.create_index("status")
+        await db.work_orders.create_index("is_deleted")
+        
+        # Master Work Orders
+        await db.master_work_orders.create_index("master_wo_id", unique=True)
+        await db.master_work_orders.create_index("work_order_number")
+        await db.master_work_orders.create_index("status")
+        
+        # Resources
+        await db.trainers.create_index("trainer_id", unique=True)
+        await db.trainers.create_index("email")
+        await db.trainers.create_index("status")
+        await db.trainers.create_index("is_deleted")
+        
+        await db.center_managers.create_index("manager_id", unique=True)
+        await db.center_managers.create_index("email")
+        await db.center_managers.create_index("status")
+        
+        await db.sdc_infrastructure.create_index("infra_id", unique=True)
+        await db.sdc_infrastructure.create_index("district")
+        await db.sdc_infrastructure.create_index("status")
+        
+        # Job Roles
+        await db.job_role_master.create_index("job_role_id", unique=True)
+        await db.job_role_master.create_index("job_role_code", unique=True)
+        await db.job_role_master.create_index("is_active")
+        
+        # Audit Logs
+        await db.audit_logs.create_index("audit_id", unique=True)
+        await db.audit_logs.create_index([("timestamp", -1)])
+        await db.audit_logs.create_index("entity_type")
+        await db.audit_logs.create_index("entity_id")
+        await db.audit_logs.create_index("user_id")
+        await db.audit_logs.create_index("action")
+        
+        # Invoices
+        await db.invoices.create_index("invoice_id", unique=True)
+        await db.invoices.create_index("sdc_id")
+        await db.invoices.create_index([("invoice_date", -1)])
+        
+        # Sessions (with TTL for auto-expiry)
+        await db.user_sessions.create_index("session_token", unique=True)
+        await db.user_sessions.create_index("user_id")
+        await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+        
+        logger.info("Database indexes created successfully")
+        
+    except Exception as e:
+        logger.error(f"Error creating database indexes: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
