@@ -965,11 +965,6 @@ async def create_sdc_from_master(master_wo_id: str, sdc_data: SDCFromMasterCreat
             dist["sdcs_created"].append(sdc_id)
             break
     
-    # Calculate new totals
-    all_batches = await db.work_orders.find({"master_wo_id": master_wo_id}, {"_id": 0}).to_list(100)
-    total_students = sum(b.get("num_students", 0) for b in all_batches)
-    total_value = sum(b.get("total_contract_value", 0) for b in all_batches)
-    
     await db.master_work_orders.update_one(
         {"master_wo_id": master_wo_id},
         {"$set": {
