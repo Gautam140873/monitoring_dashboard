@@ -215,7 +215,9 @@ class TrainerMaster(BaseModel):
     phone: str
     qualification: str
     specialization: str  # Job role codes they can train
+    domain: Optional[str] = None  # Healthcare, Retail, BFSI, Technical, etc.
     experience_years: int = 0
+    nsqf_level: Optional[int] = None  # 1-10
     certifications: List[str] = []
     # Availability
     status: str = "available"  # available, assigned, on_leave
