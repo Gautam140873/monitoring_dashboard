@@ -668,6 +668,7 @@ const JobRoleForm = ({ editData, onSuccess }) => {
 const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1); // Step 1: Basic info, Step 2: Job roles, Step 3: Districts
+  const [selectKey, setSelectKey] = useState(0); // Key to force Select remount after selection
   const [formData, setFormData] = useState({
     work_order_number: "",
     awarding_body: "NSDC",
@@ -678,6 +679,9 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
   const [selectedJobRoles, setSelectedJobRoles] = useState([]);
   const [sdcDistricts, setSdcDistricts] = useState([]);
   const [newDistrict, setNewDistrict] = useState({ name: "", count: 1 });
+
+  // Available job roles (not yet selected)
+  const availableJobRoles = jobRoles.filter(jr => !selectedJobRoles.find(s => s.job_role_id === jr.job_role_id));
 
   // Calculate totals
   const allocatedTarget = selectedJobRoles.reduce((sum, jr) => sum + (jr.target || 0), 0);
@@ -691,6 +695,8 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
   const isOverAllocated = allocatedTarget > formData.total_training_target;
 
   const addJobRole = (jobRoleId) => {
+    if (!jobRoleId) return;
+    
     if (selectedJobRoles.length >= formData.num_job_roles) {
       toast.error(`Maximum ${formData.num_job_roles} job roles allowed`);
       return;
