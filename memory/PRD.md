@@ -99,20 +99,42 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 - [x] Fixed SDC detail page 403 error - User `gautam.hinger@gmail.com` was changed from 'sdc' role to 'ho' role
 - [x] Added "New Work Order" form dialog to Dashboard page
 
-### Master Data System ✅ (NEW)
-- [x] **Job Role Master** - Define job roles with categories (Cat A: ₹46/hr, Cat B: ₹42/hr)
-- [x] **Master Work Orders** - Create work orders from job roles
-- [x] **SDC Creation from Master** - Allocate SDCs to work orders with auto-calculated values
-- [x] **Financial Calculation**: Batch Value = Students × Hours × Rate Per Hour
-- [x] Master Data page accessible via Dashboard menu (HO only)
+### Master Data System ✅ (UPDATED)
+
+**New Structure:**
+```
+WORK ORDER (Master)
+├── Work Order Number: WO/2025/PMKVY/002
+├── Total Training Target: 120 (flexible allocation)
+├── Job Roles (Multiple):
+│   ├── CSC/Q0801 - Field Technician: 90 students (Cat A, ₹46/hr)
+│   └── ELE/Q4601 - Solar Technician: 30 students (Cat B, ₹42/hr)
+├── SDC Districts:
+│   ├── Udaipur (2 SDCs) → SDC_UDAIPUR1, SDC_UDAIPUR2
+│   └── Jaipur (1 SDC) → SDC_JAIPUR
+└── Total Contract Value: ₹20,34,000
+```
+
+**Features:**
+- [x] Multiple Job Roles per Work Order with individual targets
+- [x] Flexible target allocation (e.g., 120 total split as 90+30)
+- [x] Multiple SDC districts with configurable count
+- [x] SDC naming convention: SDC_DISTRICT or SDC_DISTRICT1, SDC_DISTRICT2
+- [x] Address details captured at SDC level (not master)
+- [x] Auto-calculated contract values: Students × Hours × Rate
+
+**Financial Calculation:**
+- Job Role Value = Target × Hours × Rate/hr
+- Work Order Value = Sum of all Job Role Values
+- SDC Value = Students × Job Role Hours × Rate
 
 ### Data Flow
 ```
-JOB ROLE MASTER (HO defines)
-    ↓ Select job role
-MASTER WORK ORDER (HO creates)
-    ↓ Add SDC allocation
-SDC + WORK ORDER (Auto-created with calculated values)
+JOB ROLE MASTER (Define rates & hours)
+    ↓ Select multiple job roles
+MASTER WORK ORDER (Define targets & districts)
+    ↓ Create SDCs from districts  
+SDC (With address details)
     ↓ View in
 DASHBOARD / SUMMARY REPORT
 ```
