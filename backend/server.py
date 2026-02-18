@@ -286,18 +286,47 @@ class JobRoleMasterUpdate(BaseModel):
     default_batch_size: Optional[int] = None
     is_active: Optional[bool] = None
 
+class JobRoleAllocation(BaseModel):
+    """Job Role allocation within a Work Order"""
+    job_role_id: str
+    target: int  # Target students for this job role
+
+class SDCDistrictAllocation(BaseModel):
+    """SDC/District allocation within a Work Order"""
+    district_name: str  # e.g., "Udaipur"
+    sdc_count: int = 1  # Number of SDCs in this district (1, 2, etc.)
+
 class MasterWorkOrderCreate(BaseModel):
-    """Create Work Order from Master Data"""
+    """Create Work Order with multiple job roles and SDC districts"""
     work_order_number: str
-    job_role_id: str  # Reference to JobRoleMaster
+    awarding_body: str
+    scheme_name: str
+    total_training_target: int  # Total target across all
+    job_roles: List[JobRoleAllocation]  # Multiple job roles with targets
+    sdc_districts: List[SDCDistrictAllocation]  # SDC districts
+
+class MasterWorkOrderUpdate(BaseModel):
+    """Update Master Work Order"""
+    awarding_body: Optional[str] = None
+    scheme_name: Optional[str] = None
+    total_training_target: Optional[int] = None
+    status: Optional[str] = None
 
 class SDCFromMasterCreate(BaseModel):
-    """Create SDC from Master Work Order"""
-    master_wo_id: str  # Reference to MasterWorkOrder
-    location: str  # SDC location/name
-    target_students: int  # Target allocation for this SDC
-    daily_hours: int = 8  # 4, 6, or 8
+    """Create/Open SDC from Master Work Order"""
+    master_wo_id: str
+    district_name: str  # District from master
+    sdc_suffix: Optional[str] = None  # e.g., "1", "2" for SDC_UDAIPUR1, SDC_UDAIPUR2
+    job_role_id: str  # Which job role this SDC handles
+    target_students: int
+    daily_hours: int = 8
     manager_email: Optional[str] = None
+    # Address details (captured at SDC level)
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
 
 # ==================== AUTH HELPERS ====================
 
