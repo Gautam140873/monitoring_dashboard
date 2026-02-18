@@ -3,6 +3,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Pages
 import LandingPage from "@/pages/LandingPage";
@@ -18,6 +19,37 @@ const API = `${BACKEND_URL}/api`;
 
 // Configure axios defaults
 axios.defaults.withCredentials = true;
+
+// Configure axios interceptors for global error handling
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle specific error codes
+    if (error.response) {
+      switch (error.response.status) {
+        case 401:
+          // Unauthorized - redirect to login
+          if (window.location.pathname !== '/') {
+            console.warn('Session expired, redirecting to login...');
+            // Don't redirect immediately, let the component handle it
+          }
+          break;
+        case 403:
+          console.warn('Access denied:', error.response.data?.detail);
+          break;
+        case 500:
+          console.error('Server error:', error.response.data?.detail);
+          break;
+        default:
+          break;
+      }
+    } else if (error.request) {
+      // Network error - no response received
+      console.error('Network error - server may be unavailable');
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Auth Context
 export const useAuth = () => {
