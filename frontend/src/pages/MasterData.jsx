@@ -149,7 +149,15 @@ export default function MasterData({ user }) {
 
   useEffect(() => {
     fetchData();
+    fetchResources();
   }, []);
+
+  // Fetch resources when switching to resources tab
+  useEffect(() => {
+    if (activeTab === "resources") {
+      fetchResources();
+    }
+  }, [activeTab]);
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-IN', {
