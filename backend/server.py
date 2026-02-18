@@ -692,40 +692,70 @@ async def list_master_work_orders(user: User = Depends(require_ho_role)):
     # Enrich with SDC count and totals
     for wo in work_orders:
         sdcs = await db.sdcs.find({"master_wo_id": wo["master_wo_id"]}, {"_id": 0}).to_list(100)
-        wo["sdc_count"] = len(sdcs)
-        wo["sdcs"] = sdcs
+        wo["sdcs_created"] = sdcs
+        wo["sdcs_created_count"] = len(sdcs)
+        
+        # Calculate actual totals from created SDCs
+        wo_batches = await db.work_orders.find({"master_wo_id": wo["master_wo_id"]}, {"_id": 0}).to_list(100)
+        wo["actual_students"] = sum(b.get("num_students", 0) for b in wo_batches)
+        wo["actual_value"] = sum(b.get("total_contract_value", 0) for b in wo_batches)
     
     return work_orders
 
 @api_router.post("/master/work-orders")
 async def create_master_work_order(mwo_data: MasterWorkOrderCreate, user: User = Depends(require_ho_role)):
-    """Create a Master Work Order from Job Role (HO only)"""
-    # Get Job Role details
-    job_role = await db.job_role_master.find_one({"job_role_id": mwo_data.job_role_id}, {"_id": 0})
-    if not job_role:
-        raise HTTPException(status_code=404, detail="Job Role not found in Master Data")
-    
-    if not job_role.get("is_active", True):
-        raise HTTPException(status_code=400, detail="Job Role is not active")
+    """Create a Master Work Order with multiple job roles and SDC districts (HO only)"""
     
     # Check for duplicate work order number
     existing = await db.master_work_orders.find_one({"work_order_number": mwo_data.work_order_number})
     if existing:
         raise HTTPException(status_code=400, detail=f"Work Order {mwo_data.work_order_number} already exists")
     
+    # Validate and fetch job roles
+    job_roles_data = []
+    total_contract_value = 0
+    
+    for jr_alloc in mwo_data.job_roles:
+        job_role = await db.job_role_master.find_one({"job_role_id": jr_alloc.job_role_id}, {"_id": 0})
+        if not job_role:
+            raise HTTPException(status_code=404, detail=f"Job Role {jr_alloc.job_role_id} not found")
+        if not job_role.get("is_active", True):
+            raise HTTPException(status_code=400, detail=f"Job Role {job_role['job_role_code']} is not active")
+        
+        # Calculate value for this job role allocation
+        jr_value = jr_alloc.target * job_role["total_training_hours"] * job_role["rate_per_hour"]
+        total_contract_value += jr_value
+        
+        job_roles_data.append({
+            "job_role_id": job_role["job_role_id"],
+            "job_role_code": job_role["job_role_code"],
+            "job_role_name": job_role["job_role_name"],
+            "category": job_role["category"],
+            "rate_per_hour": job_role["rate_per_hour"],
+            "total_training_hours": job_role["total_training_hours"],
+            "target": jr_alloc.target,
+            "value": jr_value
+        })
+    
+    # Prepare SDC districts
+    sdc_districts_data = []
+    for sdc_dist in mwo_data.sdc_districts:
+        sdc_districts_data.append({
+            "district_name": sdc_dist.district_name,
+            "sdc_count": sdc_dist.sdc_count,
+            "sdcs_created": []  # Will be populated when SDCs are actually created
+        })
+    
     master_wo = {
         "master_wo_id": f"mwo_{uuid.uuid4().hex[:8]}",
         "work_order_number": mwo_data.work_order_number,
-        "job_role_id": job_role["job_role_id"],
-        "job_role_code": job_role["job_role_code"],
-        "job_role_name": job_role["job_role_name"],
-        "category": job_role["category"],
-        "rate_per_hour": job_role["rate_per_hour"],
-        "total_training_hours": job_role["total_training_hours"],
-        "awarding_body": job_role["awarding_body"],
-        "scheme_name": job_role["scheme_name"],
-        "total_target_students": 0,
-        "total_contract_value": 0,
+        "awarding_body": mwo_data.awarding_body,
+        "scheme_name": mwo_data.scheme_name,
+        "total_training_target": mwo_data.total_training_target,
+        "job_roles": job_roles_data,
+        "num_sdcs": sum(d.sdc_count for d in mwo_data.sdc_districts),
+        "sdc_districts": sdc_districts_data,
+        "total_contract_value": total_contract_value,
         "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": user.user_id,
@@ -735,7 +765,7 @@ async def create_master_work_order(mwo_data: MasterWorkOrderCreate, user: User =
     master_wo_to_insert = master_wo.copy()
     await db.master_work_orders.insert_one(master_wo_to_insert)
     
-    logger.info(f"Created Master Work Order: {mwo_data.work_order_number}")
+    logger.info(f"Created Master Work Order: {mwo_data.work_order_number} with {len(job_roles_data)} job roles and {master_wo['num_sdcs']} SDC districts")
     return master_wo
 
 @api_router.get("/master/work-orders/{master_wo_id}")
@@ -759,50 +789,128 @@ async def get_master_work_order(master_wo_id: str, user: User = Depends(require_
         sdc["total_students"] = sum(wo.get("num_students", 0) for wo in work_orders)
         sdc["total_value"] = sum(wo.get("total_contract_value", 0) for wo in work_orders)
     
-    master_wo["sdcs"] = sdcs
-    master_wo["sdc_count"] = len(sdcs)
+    master_wo["sdcs_created"] = sdcs
+    master_wo["sdcs_created_count"] = len(sdcs)
     
     return master_wo
 
+@api_router.put("/master/work-orders/{master_wo_id}")
+async def update_master_work_order(master_wo_id: str, mwo_update: MasterWorkOrderUpdate, user: User = Depends(require_ho_role)):
+    """Update Master Work Order (HO only)"""
+    master_wo = await db.master_work_orders.find_one({"master_wo_id": master_wo_id})
+    if not master_wo:
+        raise HTTPException(status_code=404, detail="Master Work Order not found")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if mwo_update.awarding_body is not None:
+        update_data["awarding_body"] = mwo_update.awarding_body
+    if mwo_update.scheme_name is not None:
+        update_data["scheme_name"] = mwo_update.scheme_name
+    if mwo_update.total_training_target is not None:
+        update_data["total_training_target"] = mwo_update.total_training_target
+    if mwo_update.status is not None:
+        update_data["status"] = mwo_update.status
+    
+    await db.master_work_orders.update_one({"master_wo_id": master_wo_id}, {"$set": update_data})
+    return {"message": "Master Work Order updated successfully"}
+
+@api_router.post("/master/work-orders/{master_wo_id}/add-sdc-district")
+async def add_sdc_district(master_wo_id: str, district: SDCDistrictAllocation, user: User = Depends(require_ho_role)):
+    """Add a new SDC district to existing Master Work Order (HO only)"""
+    master_wo = await db.master_work_orders.find_one({"master_wo_id": master_wo_id})
+    if not master_wo:
+        raise HTTPException(status_code=404, detail="Master Work Order not found")
+    
+    sdc_districts = master_wo.get("sdc_districts", [])
+    sdc_districts.append({
+        "district_name": district.district_name,
+        "sdc_count": district.sdc_count,
+        "sdcs_created": []
+    })
+    
+    await db.master_work_orders.update_one(
+        {"master_wo_id": master_wo_id},
+        {"$set": {
+            "sdc_districts": sdc_districts,
+            "num_sdcs": sum(d.get("sdc_count", 1) for d in sdc_districts),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": f"District {district.district_name} added successfully"}
+
 @api_router.post("/master/work-orders/{master_wo_id}/sdcs")
 async def create_sdc_from_master(master_wo_id: str, sdc_data: SDCFromMasterCreate, user: User = Depends(require_ho_role)):
-    """Create SDC from Master Work Order (HO only)
-    This creates the SDC and initial work order/batch automatically
+    """Create/Open SDC from Master Work Order (HO only)
+    SDC naming: SDC_DISTRICT or SDC_DISTRICT1, SDC_DISTRICT2 for multiple
     """
     # Get Master Work Order
     master_wo = await db.master_work_orders.find_one({"master_wo_id": master_wo_id}, {"_id": 0})
     if not master_wo:
         raise HTTPException(status_code=404, detail="Master Work Order not found")
     
-    # Create or get SDC
-    location_key = sdc_data.location.lower().replace(" ", "_").replace(",", "")
-    sdc_id = f"sdc_{location_key}"
+    # Get the job role details
+    job_role = None
+    for jr in master_wo.get("job_roles", []):
+        if jr["job_role_id"] == sdc_data.job_role_id:
+            job_role = jr
+            break
+    
+    if not job_role:
+        # Fallback to fetching from job_role_master
+        job_role_doc = await db.job_role_master.find_one({"job_role_id": sdc_data.job_role_id}, {"_id": 0})
+        if not job_role_doc:
+            raise HTTPException(status_code=404, detail="Job Role not found")
+        job_role = job_role_doc
+    
+    # Generate SDC ID based on district name and suffix
+    district_key = sdc_data.district_name.upper().replace(" ", "_")
+    if sdc_data.sdc_suffix:
+        sdc_id = f"sdc_{district_key}{sdc_data.sdc_suffix}".lower()
+        sdc_name = f"SDC {sdc_data.district_name.title()} {sdc_data.sdc_suffix}"
+    else:
+        sdc_id = f"sdc_{district_key}".lower()
+        sdc_name = f"SDC {sdc_data.district_name.title()}"
     
     existing_sdc = await db.sdcs.find_one({"sdc_id": sdc_id}, {"_id": 0})
     
     if existing_sdc:
-        # Update existing SDC with master_wo_id if not set
-        if not existing_sdc.get("master_wo_id"):
-            await db.sdcs.update_one(
-                {"sdc_id": sdc_id},
-                {"$set": {
-                    "master_wo_id": master_wo_id,
-                    "target_students": sdc_data.target_students,
-                    "last_updated": datetime.now(timezone.utc).isoformat()
-                }}
-            )
+        # Update existing SDC
+        await db.sdcs.update_one(
+            {"sdc_id": sdc_id},
+            {"$set": {
+                "master_wo_id": master_wo_id,
+                "target_students": sdc_data.target_students,
+                "job_role_id": sdc_data.job_role_id,
+                "address_line1": sdc_data.address_line1,
+                "address_line2": sdc_data.address_line2,
+                "city": sdc_data.city,
+                "state": sdc_data.state,
+                "pincode": sdc_data.pincode,
+                "last_updated": datetime.now(timezone.utc).isoformat()
+            }}
+        )
         sdc = existing_sdc
         sdc["master_wo_id"] = master_wo_id
         sdc["target_students"] = sdc_data.target_students
     else:
-        # Create new SDC
+        # Create new SDC with address details
         sdc = {
             "sdc_id": sdc_id,
-            "name": f"SDC {sdc_data.location.title()}",
-            "location": sdc_data.location,
+            "name": sdc_name,
+            "district": sdc_data.district_name,
+            "location": sdc_data.district_name,
             "master_wo_id": master_wo_id,
+            "job_role_id": sdc_data.job_role_id,
             "target_students": sdc_data.target_students,
             "manager_email": sdc_data.manager_email,
+            # Address details
+            "address_line1": sdc_data.address_line1,
+            "address_line2": sdc_data.address_line2,
+            "city": sdc_data.city,
+            "state": sdc_data.state,
+            "pincode": sdc_data.pincode,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_updated": datetime.now(timezone.utc).isoformat()
         }
@@ -810,24 +918,28 @@ async def create_sdc_from_master(master_wo_id: str, sdc_data: SDCFromMasterCreat
         await db.sdcs.insert_one(sdc_to_insert)
     
     # Calculate contract value: Students × Hours × Rate
-    contract_value = sdc_data.target_students * master_wo["total_training_hours"] * master_wo["rate_per_hour"]
+    training_hours = job_role.get("total_training_hours", 0)
+    rate = job_role.get("rate_per_hour", 0)
+    contract_value = sdc_data.target_students * training_hours * rate
     
     # Create Work Order (Batch) for this SDC
+    wo_suffix = sdc_data.sdc_suffix or district_key[:3]
     work_order = {
         "work_order_id": f"wo_{uuid.uuid4().hex[:8]}",
-        "work_order_number": f"{master_wo['work_order_number']}/{sdc_data.location.upper()[:3]}",
+        "work_order_number": f"{master_wo['work_order_number']}/{wo_suffix}",
         "master_wo_id": master_wo_id,
         "sdc_id": sdc_id,
-        "location": sdc_data.location,
-        "job_role_code": master_wo["job_role_code"],
-        "job_role_name": master_wo["job_role_name"],
-        "awarding_body": master_wo["awarding_body"],
-        "scheme_name": master_wo["scheme_name"],
-        "total_training_hours": master_wo["total_training_hours"],
+        "location": sdc_data.district_name,
+        "job_role_id": sdc_data.job_role_id,
+        "job_role_code": job_role.get("job_role_code", ""),
+        "job_role_name": job_role.get("job_role_name", ""),
+        "awarding_body": master_wo.get("awarding_body", ""),
+        "scheme_name": master_wo.get("scheme_name", ""),
+        "total_training_hours": training_hours,
         "sessions_per_day": sdc_data.daily_hours,
         "num_students": sdc_data.target_students,
-        "rate_per_hour": master_wo["rate_per_hour"],
-        "cost_per_student": master_wo["total_training_hours"] * master_wo["rate_per_hour"],
+        "rate_per_hour": rate,
+        "cost_per_student": training_hours * rate,
         "total_contract_value": contract_value,
         "manager_email": sdc_data.manager_email,
         "start_date": None,
@@ -844,28 +956,38 @@ async def create_sdc_from_master(master_wo_id: str, sdc_data: SDCFromMasterCreat
     # Create Training Roadmap for this work order
     await create_training_roadmap(work_order["work_order_id"], sdc_id, sdc_data.target_students)
     
-    # Update Master Work Order totals
-    all_sdcs = await db.sdcs.find({"master_wo_id": master_wo_id}, {"_id": 0}).to_list(100)
-    total_students = sum(s.get("target_students", 0) for s in all_sdcs)
-    total_value = total_students * master_wo["total_training_hours"] * master_wo["rate_per_hour"]
+    # Update the sdc_districts in master work order to track created SDCs
+    sdc_districts = master_wo.get("sdc_districts", [])
+    for dist in sdc_districts:
+        if dist["district_name"].lower() == sdc_data.district_name.lower():
+            if "sdcs_created" not in dist:
+                dist["sdcs_created"] = []
+            dist["sdcs_created"].append(sdc_id)
+            break
+    
+    # Calculate new totals
+    all_batches = await db.work_orders.find({"master_wo_id": master_wo_id}, {"_id": 0}).to_list(100)
+    total_students = sum(b.get("num_students", 0) for b in all_batches)
+    total_value = sum(b.get("total_contract_value", 0) for b in all_batches)
     
     await db.master_work_orders.update_one(
         {"master_wo_id": master_wo_id},
         {"$set": {
-            "total_target_students": total_students,
-            "total_contract_value": total_value,
+            "sdc_districts": sdc_districts,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
     
-    logger.info(f"Created SDC {sdc_data.location} for Master WO {master_wo['work_order_number']}")
+    logger.info(f"Created SDC {sdc_name} for Master WO {master_wo['work_order_number']}")
     
     return {
         "message": "SDC created successfully from Master Data",
         "sdc": sdc,
+        "sdc_id": sdc_id,
+        "sdc_name": sdc_name,
         "work_order": work_order,
         "contract_value": contract_value,
-        "calculation": f"{sdc_data.target_students} students × {master_wo['total_training_hours']} hrs × ₹{master_wo['rate_per_hour']}/hr"
+        "calculation": f"{sdc_data.target_students} students × {training_hours} hrs × ₹{rate}/hr"
     }
 
 @api_router.get("/master/summary")
