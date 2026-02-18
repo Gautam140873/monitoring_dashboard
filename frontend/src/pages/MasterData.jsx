@@ -1673,21 +1673,34 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.post(`${API}/master/work-orders/${masterWO.master_wo_id}/sdcs`, {
+      // Create the SDC
+      const response = await axios.post(`${API}/master/work-orders/${masterWO.master_wo_id}/sdcs`, {
         master_wo_id: masterWO.master_wo_id,
         ...formData
       });
       
+      const createdSdcId = response.data.sdc_id;
+      
       // If infrastructure was selected, mark it as in_use
       if (formData.infra_id) {
-        await axios.post(`${API}/resources/infrastructure/${formData.infra_id}/assign`, null, {
-          params: { work_order_id: masterWO.master_wo_id }
-        });
+        try {
+          await axios.post(`${API}/resources/infrastructure/${formData.infra_id}/assign`, null, {
+            params: { work_order_id: masterWO.master_wo_id }
+          });
+        } catch (infraError) {
+          console.warn("Infrastructure assignment failed:", infraError);
+        }
       }
       
-      // If manager was selected, mark as assigned
+      // If manager was selected, assign to this SDC
       if (selectedManager) {
-        // We'll assign when SDC is fully created
+        try {
+          await axios.post(`${API}/resources/managers/${selectedManager.manager_id}/assign`, null, {
+            params: { sdc_id: createdSdcId }
+          });
+        } catch (managerError) {
+          console.warn("Manager assignment failed:", managerError);
+        }
       }
       
       toast.success(`SDC ${sdcNamePreview} created successfully!`);
