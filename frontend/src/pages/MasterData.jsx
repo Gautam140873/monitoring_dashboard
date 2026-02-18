@@ -734,7 +734,7 @@ export default function MasterData({ user }) {
                     ))}
                     {trainers.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                           <GraduationCap className="w-8 h-8 mx-auto mb-2 opacity-50" />
                           No trainers added. Click "Add Trainer" to create one.
                         </TableCell>
