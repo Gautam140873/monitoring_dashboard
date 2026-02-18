@@ -406,27 +406,60 @@ export default function MasterData({ user }) {
                                 </div>
 
                                 {/* Create SDC Button */}
-                                <Dialog open={showSDCDialog && selectedMasterWO?.master_wo_id === mwo.master_wo_id} onOpenChange={(open) => {
-                                  setShowSDCDialog(open);
-                                  if (!open) setSelectedMasterWO(null);
-                                }}>
-                                  <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm" onClick={() => setSelectedMasterWO(mwo)}>
-                                      <Plus className="w-4 h-4 mr-1" />
-                                      Create SDC
+                                <div className="flex items-center gap-2">
+                                  <Dialog open={showSDCDialog && selectedMasterWO?.master_wo_id === mwo.master_wo_id} onOpenChange={(open) => {
+                                    setShowSDCDialog(open);
+                                    if (!open) setSelectedMasterWO(null);
+                                  }}>
+                                    <DialogTrigger asChild>
+                                      <Button variant="outline" size="sm" onClick={() => setSelectedMasterWO(mwo)} disabled={mwo.status === "completed"}>
+                                        <Plus className="w-4 h-4 mr-1" />
+                                        Create SDC
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-xl" onInteractOutside={(e) => e.preventDefault()}>
+                                      <SDCFromMasterForm 
+                                        masterWO={mwo}
+                                        onSuccess={() => {
+                                          setShowSDCDialog(false);
+                                          setSelectedMasterWO(null);
+                                          fetchData();
+                                        }} 
+                                      />
+                                    </DialogContent>
+                                  </Dialog>
+
+                                  {/* Complete Work Order Button */}
+                                  {mwo.status === "active" && (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="text-emerald-600 border-emerald-300 hover:bg-emerald-50"
+                                      onClick={async () => {
+                                        if (window.confirm(`Are you sure you want to mark "${mwo.work_order_number}" as completed? This will release all assigned resources (trainers, managers, centers).`)) {
+                                          try {
+                                            const res = await axios.post(`${API}/master/work-orders/${mwo.master_wo_id}/complete`);
+                                            toast.success(`Work Order completed! Released: ${res.data.released_resources.trainers} trainers, ${res.data.released_resources.managers} managers, ${res.data.released_resources.infrastructure} centers`);
+                                            fetchData();
+                                            fetchResources();
+                                          } catch (error) {
+                                            toast.error(error.response?.data?.detail || "Failed to complete work order");
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      <CheckCircle className="w-4 h-4 mr-1" />
+                                      Complete & Release Resources
                                     </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-xl" onInteractOutside={(e) => e.preventDefault()}>
-                                    <SDCFromMasterForm 
-                                      masterWO={mwo}
-                                      onSuccess={() => {
-                                        setShowSDCDialog(false);
-                                        setSelectedMasterWO(null);
-                                        fetchData();
-                                      }} 
-                                    />
-                                  </DialogContent>
-                                </Dialog>
+                                  )}
+                                  
+                                  {mwo.status === "completed" && (
+                                    <Badge variant="default" className="bg-emerald-100 text-emerald-700">
+                                      <CheckCircle className="w-3 h-3 mr-1" />
+                                      Completed
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
                             </CollapsibleContent>
                           </CardContent>
