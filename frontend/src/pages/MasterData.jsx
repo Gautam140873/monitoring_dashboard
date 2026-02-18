@@ -931,6 +931,7 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
             <div>
               <Label>Select Job Roles ({selectedJobRoles.length}/{formData.num_job_roles})</Label>
               <Select 
+                key={selectKey}
                 onValueChange={(value) => {
                   if (value) {
                     addJobRole(value);
@@ -942,19 +943,25 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
                   <SelectValue placeholder={
                     selectedJobRoles.length >= formData.num_job_roles 
                       ? "Maximum job roles selected" 
-                      : "Select job role to add..."
+                      : `Select job role to add... (${availableJobRoles.length} available)`
                   } />
                 </SelectTrigger>
                 <SelectContent>
-                  {jobRoles.filter(jr => !selectedJobRoles.find(s => s.job_role_id === jr.job_role_id)).map((jr) => (
-                    <SelectItem key={jr.job_role_id} value={jr.job_role_id} data-testid={`job-role-option-${jr.job_role_id}`}>
-                      {jr.job_role_code} - {jr.job_role_name} (Cat {jr.category}, ₹{jr.rate_per_hour}/hr)
-                    </SelectItem>
-                  ))}
+                  {availableJobRoles.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground text-center">
+                      {jobRoles.length === 0 ? "No job roles defined" : "All job roles selected"}
+                    </div>
+                  ) : (
+                    availableJobRoles.map((jr) => (
+                      <SelectItem key={jr.job_role_id} value={jr.job_role_id} data-testid={`job-role-option-${jr.job_role_id}`}>
+                        {jr.job_role_code} - {jr.job_role_name} (Cat {jr.category}, ₹{jr.rate_per_hour}/hr)
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               {jobRoles.length === 0 && (
-                <p className="text-xs text-red-500 mt-1">No job roles available. Please create job roles first.</p>
+                <p className="text-xs text-red-500 mt-1">No job roles available. Please create job roles first in the Job Roles tab.</p>
               )}
             </div>
 
