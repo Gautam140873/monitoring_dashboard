@@ -1563,7 +1563,6 @@ async def send_risk_summary_email(recipient: EmailRecipient, user: User = Depend
     alerts = await db.alerts.find({"resolved": False}, {"_id": 0}).to_list(1000)
     
     # Get dashboard overview
-    sdcs = await db.sdcs.find({}, {"_id": 0}).to_list(1000)
     work_orders = await db.work_orders.find({}, {"_id": 0}).to_list(1000)
     invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
     
