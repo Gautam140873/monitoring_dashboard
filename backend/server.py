@@ -1006,13 +1006,35 @@ async def list_users(user: User = Depends(require_ho_role)):
 @api_router.put("/users/{user_id}/role")
 async def update_user_role(user_id: str, role_update: UserRoleUpdate, user: User = Depends(require_ho_role)):
     """Update user role (HO only)"""
+    # Get old values for audit
+    old_user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not old_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    old_role = old_user.get("role")
+    
     result = await db.users.update_one(
         {"user_id": user_id},
-        {"$set": {"role": role_update.role, "assigned_sdc_id": role_update.assigned_sdc_id}}
+        {"$set": {
+            "role": role_update.role,
+            "assigned_sdc_id": role_update.assigned_sdc_id,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"message": "Role updated successfully"}
+    
+    if result.modified_count > 0:
+        # Create audit log for role change
+        await create_audit_log(
+            action=AuditAction.PERMISSION_CHANGE,
+            entity_type="users",
+            entity_id=user_id,
+            user_id=user.user_id,
+            user_email=user.email,
+            old_values={"role": old_role, "assigned_sdc_id": old_user.get("assigned_sdc_id")},
+            new_values={"role": role_update.role, "assigned_sdc_id": role_update.assigned_sdc_id}
+        )
+    
+    return {"message": "User role updated"}
 
 # ==================== MASTER DATA ENDPOINTS (HO ONLY) ====================
 
