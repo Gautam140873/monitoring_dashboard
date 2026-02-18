@@ -538,6 +538,340 @@ async def update_user_role(user_id: str, role_update: UserRoleUpdate, user: User
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "Role updated successfully"}
 
+# ==================== MASTER DATA ENDPOINTS (HO ONLY) ====================
+
+# Category rate mapping
+CATEGORY_RATES = {
+    "A": 46.0,
+    "B": 42.0
+}
+
+@api_router.get("/master/job-roles")
+async def list_job_roles(user: User = Depends(require_ho_role)):
+    """List all Job Roles from Master Data (HO only)"""
+    job_roles = await db.job_role_master.find({}, {"_id": 0}).to_list(1000)
+    return job_roles
+
+@api_router.get("/master/job-roles/active")
+async def list_active_job_roles(user: User = Depends(get_current_user)):
+    """List active Job Roles (for dropdown selection)"""
+    job_roles = await db.job_role_master.find({"is_active": True}, {"_id": 0}).to_list(1000)
+    return job_roles
+
+@api_router.post("/master/job-roles")
+async def create_job_role(jr_data: JobRoleMasterCreate, user: User = Depends(require_ho_role)):
+    """Create a new Job Role in Master Data (HO only)"""
+    # Auto-set rate based on category
+    rate = jr_data.rate_per_hour
+    if rate is None:
+        rate = CATEGORY_RATES.get(jr_data.category.upper(), 0)
+    
+    job_role = {
+        "job_role_id": f"jr_{uuid.uuid4().hex[:8]}",
+        "job_role_code": jr_data.job_role_code,
+        "job_role_name": jr_data.job_role_name,
+        "category": jr_data.category.upper(),
+        "rate_per_hour": rate,
+        "total_training_hours": jr_data.total_training_hours,
+        "awarding_body": jr_data.awarding_body,
+        "scheme_name": jr_data.scheme_name,
+        "default_daily_hours": jr_data.default_daily_hours,
+        "default_batch_size": jr_data.default_batch_size,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.user_id,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Check for duplicate job role code
+    existing = await db.job_role_master.find_one({"job_role_code": jr_data.job_role_code})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Job Role Code {jr_data.job_role_code} already exists")
+    
+    job_role_to_insert = job_role.copy()
+    await db.job_role_master.insert_one(job_role_to_insert)
+    
+    logger.info(f"Created Job Role: {jr_data.job_role_code} - {jr_data.job_role_name}")
+    return job_role
+
+@api_router.get("/master/job-roles/{job_role_id}")
+async def get_job_role(job_role_id: str, user: User = Depends(require_ho_role)):
+    """Get Job Role details (HO only)"""
+    job_role = await db.job_role_master.find_one({"job_role_id": job_role_id}, {"_id": 0})
+    if not job_role:
+        raise HTTPException(status_code=404, detail="Job Role not found")
+    return job_role
+
+@api_router.put("/master/job-roles/{job_role_id}")
+async def update_job_role(job_role_id: str, jr_update: JobRoleMasterUpdate, user: User = Depends(require_ho_role)):
+    """Update Job Role in Master Data (HO only)"""
+    job_role = await db.job_role_master.find_one({"job_role_id": job_role_id})
+    if not job_role:
+        raise HTTPException(status_code=404, detail="Job Role not found")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if jr_update.job_role_name is not None:
+        update_data["job_role_name"] = jr_update.job_role_name
+    if jr_update.category is not None:
+        update_data["category"] = jr_update.category.upper()
+        # Auto-update rate if category changed and no custom rate
+        if jr_update.rate_per_hour is None:
+            update_data["rate_per_hour"] = CATEGORY_RATES.get(jr_update.category.upper(), job_role.get("rate_per_hour", 0))
+    if jr_update.rate_per_hour is not None:
+        update_data["rate_per_hour"] = jr_update.rate_per_hour
+    if jr_update.total_training_hours is not None:
+        update_data["total_training_hours"] = jr_update.total_training_hours
+    if jr_update.awarding_body is not None:
+        update_data["awarding_body"] = jr_update.awarding_body
+    if jr_update.scheme_name is not None:
+        update_data["scheme_name"] = jr_update.scheme_name
+    if jr_update.default_daily_hours is not None:
+        update_data["default_daily_hours"] = jr_update.default_daily_hours
+    if jr_update.default_batch_size is not None:
+        update_data["default_batch_size"] = jr_update.default_batch_size
+    if jr_update.is_active is not None:
+        update_data["is_active"] = jr_update.is_active
+    
+    await db.job_role_master.update_one({"job_role_id": job_role_id}, {"$set": update_data})
+    
+    return {"message": "Job Role updated successfully"}
+
+@api_router.delete("/master/job-roles/{job_role_id}")
+async def delete_job_role(job_role_id: str, user: User = Depends(require_ho_role)):
+    """Delete (deactivate) Job Role from Master Data (HO only)"""
+    result = await db.job_role_master.update_one(
+        {"job_role_id": job_role_id},
+        {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Job Role not found")
+    return {"message": "Job Role deactivated successfully"}
+
+# ==================== MASTER WORK ORDER ENDPOINTS ====================
+
+@api_router.get("/master/work-orders")
+async def list_master_work_orders(user: User = Depends(require_ho_role)):
+    """List all Master Work Orders (HO only)"""
+    work_orders = await db.master_work_orders.find({}, {"_id": 0}).to_list(1000)
+    
+    # Enrich with SDC count and totals
+    for wo in work_orders:
+        sdcs = await db.sdcs.find({"master_wo_id": wo["master_wo_id"]}, {"_id": 0}).to_list(100)
+        wo["sdc_count"] = len(sdcs)
+        wo["sdcs"] = sdcs
+    
+    return work_orders
+
+@api_router.post("/master/work-orders")
+async def create_master_work_order(mwo_data: MasterWorkOrderCreate, user: User = Depends(require_ho_role)):
+    """Create a Master Work Order from Job Role (HO only)"""
+    # Get Job Role details
+    job_role = await db.job_role_master.find_one({"job_role_id": mwo_data.job_role_id}, {"_id": 0})
+    if not job_role:
+        raise HTTPException(status_code=404, detail="Job Role not found in Master Data")
+    
+    if not job_role.get("is_active", True):
+        raise HTTPException(status_code=400, detail="Job Role is not active")
+    
+    # Check for duplicate work order number
+    existing = await db.master_work_orders.find_one({"work_order_number": mwo_data.work_order_number})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Work Order {mwo_data.work_order_number} already exists")
+    
+    master_wo = {
+        "master_wo_id": f"mwo_{uuid.uuid4().hex[:8]}",
+        "work_order_number": mwo_data.work_order_number,
+        "job_role_id": job_role["job_role_id"],
+        "job_role_code": job_role["job_role_code"],
+        "job_role_name": job_role["job_role_name"],
+        "category": job_role["category"],
+        "rate_per_hour": job_role["rate_per_hour"],
+        "total_training_hours": job_role["total_training_hours"],
+        "awarding_body": job_role["awarding_body"],
+        "scheme_name": job_role["scheme_name"],
+        "total_target_students": 0,
+        "total_contract_value": 0,
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.user_id,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    master_wo_to_insert = master_wo.copy()
+    await db.master_work_orders.insert_one(master_wo_to_insert)
+    
+    logger.info(f"Created Master Work Order: {mwo_data.work_order_number}")
+    return master_wo
+
+@api_router.get("/master/work-orders/{master_wo_id}")
+async def get_master_work_order(master_wo_id: str, user: User = Depends(require_ho_role)):
+    """Get Master Work Order with all linked SDCs (HO only)"""
+    master_wo = await db.master_work_orders.find_one({"master_wo_id": master_wo_id}, {"_id": 0})
+    if not master_wo:
+        raise HTTPException(status_code=404, detail="Master Work Order not found")
+    
+    # Get all SDCs linked to this Master Work Order
+    sdcs = await db.sdcs.find({"master_wo_id": master_wo_id}, {"_id": 0}).to_list(100)
+    
+    # Get work orders (batches) for each SDC
+    for sdc in sdcs:
+        work_orders = await db.work_orders.find(
+            {"sdc_id": sdc["sdc_id"], "master_wo_id": master_wo_id}, 
+            {"_id": 0}
+        ).to_list(100)
+        sdc["work_orders"] = work_orders
+        sdc["batch_count"] = len(work_orders)
+        sdc["total_students"] = sum(wo.get("num_students", 0) for wo in work_orders)
+        sdc["total_value"] = sum(wo.get("total_contract_value", 0) for wo in work_orders)
+    
+    master_wo["sdcs"] = sdcs
+    master_wo["sdc_count"] = len(sdcs)
+    
+    return master_wo
+
+@api_router.post("/master/work-orders/{master_wo_id}/sdcs")
+async def create_sdc_from_master(master_wo_id: str, sdc_data: SDCFromMasterCreate, user: User = Depends(require_ho_role)):
+    """Create SDC from Master Work Order (HO only)
+    This creates the SDC and initial work order/batch automatically
+    """
+    # Get Master Work Order
+    master_wo = await db.master_work_orders.find_one({"master_wo_id": master_wo_id}, {"_id": 0})
+    if not master_wo:
+        raise HTTPException(status_code=404, detail="Master Work Order not found")
+    
+    # Create or get SDC
+    location_key = sdc_data.location.lower().replace(" ", "_").replace(",", "")
+    sdc_id = f"sdc_{location_key}"
+    
+    existing_sdc = await db.sdcs.find_one({"sdc_id": sdc_id}, {"_id": 0})
+    
+    if existing_sdc:
+        # Update existing SDC with master_wo_id if not set
+        if not existing_sdc.get("master_wo_id"):
+            await db.sdcs.update_one(
+                {"sdc_id": sdc_id},
+                {"$set": {
+                    "master_wo_id": master_wo_id,
+                    "target_students": sdc_data.target_students,
+                    "last_updated": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+        sdc = existing_sdc
+        sdc["master_wo_id"] = master_wo_id
+        sdc["target_students"] = sdc_data.target_students
+    else:
+        # Create new SDC
+        sdc = {
+            "sdc_id": sdc_id,
+            "name": f"SDC {sdc_data.location.title()}",
+            "location": sdc_data.location,
+            "master_wo_id": master_wo_id,
+            "target_students": sdc_data.target_students,
+            "manager_email": sdc_data.manager_email,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_updated": datetime.now(timezone.utc).isoformat()
+        }
+        sdc_to_insert = sdc.copy()
+        await db.sdcs.insert_one(sdc_to_insert)
+    
+    # Calculate contract value: Students × Hours × Rate
+    contract_value = sdc_data.target_students * master_wo["total_training_hours"] * master_wo["rate_per_hour"]
+    
+    # Create Work Order (Batch) for this SDC
+    work_order = {
+        "work_order_id": f"wo_{uuid.uuid4().hex[:8]}",
+        "work_order_number": f"{master_wo['work_order_number']}/{sdc_data.location.upper()[:3]}",
+        "master_wo_id": master_wo_id,
+        "sdc_id": sdc_id,
+        "location": sdc_data.location,
+        "job_role_code": master_wo["job_role_code"],
+        "job_role_name": master_wo["job_role_name"],
+        "awarding_body": master_wo["awarding_body"],
+        "scheme_name": master_wo["scheme_name"],
+        "total_training_hours": master_wo["total_training_hours"],
+        "sessions_per_day": sdc_data.daily_hours,
+        "num_students": sdc_data.target_students,
+        "rate_per_hour": master_wo["rate_per_hour"],
+        "cost_per_student": master_wo["total_training_hours"] * master_wo["rate_per_hour"],
+        "total_contract_value": contract_value,
+        "manager_email": sdc_data.manager_email,
+        "start_date": None,
+        "calculated_end_date": None,
+        "manual_end_date": None,
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.user_id
+    }
+    
+    work_order_to_insert = work_order.copy()
+    await db.work_orders.insert_one(work_order_to_insert)
+    
+    # Create Training Roadmap for this work order
+    await create_training_roadmap(work_order["work_order_id"], sdc_id, sdc_data.target_students)
+    
+    # Update Master Work Order totals
+    all_sdcs = await db.sdcs.find({"master_wo_id": master_wo_id}, {"_id": 0}).to_list(100)
+    total_students = sum(s.get("target_students", 0) for s in all_sdcs)
+    total_value = total_students * master_wo["total_training_hours"] * master_wo["rate_per_hour"]
+    
+    await db.master_work_orders.update_one(
+        {"master_wo_id": master_wo_id},
+        {"$set": {
+            "total_target_students": total_students,
+            "total_contract_value": total_value,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    logger.info(f"Created SDC {sdc_data.location} for Master WO {master_wo['work_order_number']}")
+    
+    return {
+        "message": "SDC created successfully from Master Data",
+        "sdc": sdc,
+        "work_order": work_order,
+        "contract_value": contract_value,
+        "calculation": f"{sdc_data.target_students} students × {master_wo['total_training_hours']} hrs × ₹{master_wo['rate_per_hour']}/hr"
+    }
+
+@api_router.get("/master/summary")
+async def get_master_summary(user: User = Depends(require_ho_role)):
+    """Get Master Data Summary with all aggregations (HO only)"""
+    # Get all job roles
+    job_roles = await db.job_role_master.find({"is_active": True}, {"_id": 0}).to_list(1000)
+    
+    # Get all master work orders
+    master_wos = await db.master_work_orders.find({}, {"_id": 0}).to_list(1000)
+    
+    # Calculate totals
+    total_contract_value = sum(wo.get("total_contract_value", 0) for wo in master_wos)
+    total_students = sum(wo.get("total_target_students", 0) for wo in master_wos)
+    
+    # Get SDC count
+    sdc_count = await db.sdcs.count_documents({})
+    
+    return {
+        "job_roles": {
+            "total": len(job_roles),
+            "category_a": len([jr for jr in job_roles if jr.get("category") == "A"]),
+            "category_b": len([jr for jr in job_roles if jr.get("category") == "B"]),
+            "custom": len([jr for jr in job_roles if jr.get("category") not in ["A", "B"]])
+        },
+        "work_orders": {
+            "total": len(master_wos),
+            "active": len([wo for wo in master_wos if wo.get("status") == "active"]),
+            "completed": len([wo for wo in master_wos if wo.get("status") == "completed"])
+        },
+        "financials": {
+            "total_contract_value": total_contract_value,
+            "total_students": total_students,
+            "average_per_student": round(total_contract_value / total_students, 2) if total_students > 0 else 0
+        },
+        "sdcs": {
+            "total": sdc_count
+        }
+    }
+
 # ==================== WORK ORDER ENDPOINTS (MASTER ENTRY) ====================
 
 @api_router.post("/work-orders")
