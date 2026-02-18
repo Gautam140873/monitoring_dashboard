@@ -9,14 +9,16 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 - Role-based security (SDC vs HO access)
 
 ## User Personas
-1. **Head Office (HO) Admin** - Full access to all SDCs, can create work orders, manage users, view financial control
-2. **SDC Manager** - Limited access to assigned center only, can set start dates, update progress, view billing
+1. **Admin** - Full system access, can manage all settings, users, and recover deleted items
+2. **Head Office (HO)** - Full operational access to all SDCs, work orders, resources, and reports
+3. **Manager** - Team lead access, can view and update team data
+4. **SDC User** - Limited access to assigned center only
 
 ## Architecture
 
 ### Backend (FastAPI + MongoDB)
 - **Authentication**: Emergent Google OAuth with session-based auth
-- **Data Models**: Users, SDCs, WorkOrders, TrainingRoadmaps, Invoices, Holidays, Alerts, ResourceMasters
+- **Data Models**: Users, SDCs, WorkOrders, TrainingRoadmaps, Invoices, Holidays, Alerts, ResourceMasters, AuditLogs
 - **Core Features**:
   - Auto-SDC creation when new location is added via Work Order
   - 7-stage Training Roadmap (Mobilization → Placement)
