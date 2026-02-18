@@ -183,6 +183,11 @@ const AppRouter = () => {
           {({ user, setUser }) => <UserManagement user={user} setUser={setUser} />}
         </ProtectedRoute>
       } />
+      <Route path="/master-data" element={
+        <ProtectedRoute>
+          {({ user, setUser }) => <MasterData user={user} setUser={setUser} />}
+        </ProtectedRoute>
+      } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
