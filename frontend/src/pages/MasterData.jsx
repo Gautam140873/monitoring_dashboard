@@ -1803,3 +1803,561 @@ const MasterDataSkeleton = () => (
     </main>
   </div>
 );
+
+// ==================== RESOURCE FORM COMPONENTS ====================
+
+// Trainer Form
+const TrainerForm = ({ editData, jobRoles, onSuccess, onCancel }) => {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: editData?.name || "",
+    email: editData?.email || "",
+    phone: editData?.phone || "",
+    qualification: editData?.qualification || "",
+    specialization: editData?.specialization || "",
+    experience_years: editData?.experience_years || 0,
+    certifications: editData?.certifications?.join(", ") || "",
+    address: editData?.address || "",
+    city: editData?.city || "",
+    state: editData?.state || ""
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const payload = {
+        ...formData,
+        experience_years: parseInt(formData.experience_years) || 0,
+        certifications: formData.certifications.split(",").map(c => c.trim()).filter(Boolean)
+      };
+      
+      if (editData) {
+        await axios.put(`${API}/resources/trainers/${editData.trainer_id}`, payload);
+        toast.success("Trainer updated successfully");
+      } else {
+        await axios.post(`${API}/resources/trainers`, payload);
+        toast.success("Trainer added successfully");
+      }
+      onSuccess();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to save trainer");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader className="flex flex-row items-start justify-between">
+        <div>
+          <DialogTitle>{editData ? "Edit Trainer" : "Add New Trainer"}</DialogTitle>
+          <DialogDescription>Enter trainer details and qualifications</DialogDescription>
+        </div>
+        <Button variant="ghost" size="icon" onClick={onCancel} className="h-8 w-8" type="button">
+          <X className="w-4 h-4" />
+        </Button>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Full Name *</Label>
+            <Input 
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Rajesh Kumar"
+              required
+            />
+          </div>
+          <div>
+            <Label>Phone *</Label>
+            <Input 
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="9876543210"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label>Email *</Label>
+          <Input 
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            placeholder="trainer@example.com"
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Qualification *</Label>
+            <Input 
+              value={formData.qualification}
+              onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
+              placeholder="B.Tech Computer Science"
+              required
+            />
+          </div>
+          <div>
+            <Label>Experience (Years)</Label>
+            <Input 
+              type="number"
+              value={formData.experience_years}
+              onChange={(e) => setFormData({ ...formData, experience_years: e.target.value })}
+              min="0"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label>Specialization (Job Role Code) *</Label>
+          <Select 
+            value={formData.specialization} 
+            onValueChange={(v) => setFormData({ ...formData, specialization: v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select job role specialization..." />
+            </SelectTrigger>
+            <SelectContent>
+              {jobRoles.filter(jr => jr.is_active).map((jr) => (
+                <SelectItem key={jr.job_role_id} value={jr.job_role_code}>
+                  {jr.job_role_code} - {jr.job_role_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>Certifications (comma-separated)</Label>
+          <Input 
+            value={formData.certifications}
+            onChange={(e) => setFormData({ ...formData, certifications: e.target.value })}
+            placeholder="TOT, NSDC Certified, ITI"
+          />
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <Label>Address</Label>
+            <Input 
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              placeholder="Street address"
+            />
+          </div>
+          <div>
+            <Label>City</Label>
+            <Input 
+              value={formData.city}
+              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+              placeholder="Jaipur"
+            />
+          </div>
+          <div>
+            <Label>State</Label>
+            <Input 
+              value={formData.state}
+              onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+              placeholder="Rajasthan"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" className="flex-1" disabled={loading}>
+            {loading ? "Saving..." : (editData ? "Update Trainer" : "Add Trainer")}
+          </Button>
+        </div>
+      </form>
+    </>
+  );
+};
+
+// Manager Form
+const ManagerForm = ({ editData, onSuccess, onCancel }) => {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: editData?.name || "",
+    email: editData?.email || "",
+    phone: editData?.phone || "",
+    qualification: editData?.qualification || "",
+    experience_years: editData?.experience_years || 0,
+    address: editData?.address || "",
+    city: editData?.city || "",
+    state: editData?.state || ""
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const payload = {
+        ...formData,
+        experience_years: parseInt(formData.experience_years) || 0
+      };
+      
+      if (editData) {
+        await axios.put(`${API}/resources/managers/${editData.manager_id}`, payload);
+        toast.success("Manager updated successfully");
+      } else {
+        await axios.post(`${API}/resources/managers`, payload);
+        toast.success("Manager added successfully");
+      }
+      onSuccess();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to save manager");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader className="flex flex-row items-start justify-between">
+        <div>
+          <DialogTitle>{editData ? "Edit Center Manager" : "Add Center Manager"}</DialogTitle>
+          <DialogDescription>Enter manager details</DialogDescription>
+        </div>
+        <Button variant="ghost" size="icon" onClick={onCancel} className="h-8 w-8" type="button">
+          <X className="w-4 h-4" />
+        </Button>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Full Name *</Label>
+            <Input 
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Amit Verma"
+              required
+            />
+          </div>
+          <div>
+            <Label>Phone *</Label>
+            <Input 
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="9876543210"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label>Email *</Label>
+          <Input 
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            placeholder="manager@example.com"
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Qualification</Label>
+            <Input 
+              value={formData.qualification}
+              onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
+              placeholder="MBA, B.Com"
+            />
+          </div>
+          <div>
+            <Label>Experience (Years)</Label>
+            <Input 
+              type="number"
+              value={formData.experience_years}
+              onChange={(e) => setFormData({ ...formData, experience_years: e.target.value })}
+              min="0"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <Label>Address</Label>
+            <Input 
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              placeholder="Street address"
+            />
+          </div>
+          <div>
+            <Label>City</Label>
+            <Input 
+              value={formData.city}
+              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+              placeholder="Jaipur"
+            />
+          </div>
+          <div>
+            <Label>State</Label>
+            <Input 
+              value={formData.state}
+              onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+              placeholder="Rajasthan"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" className="flex-1" disabled={loading}>
+            {loading ? "Saving..." : (editData ? "Update Manager" : "Add Manager")}
+          </Button>
+        </div>
+      </form>
+    </>
+  );
+};
+
+// Infrastructure Form
+const InfrastructureForm = ({ editData, onSuccess, onCancel }) => {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    center_name: editData?.center_name || "",
+    center_code: editData?.center_code || "",
+    district: editData?.district || "",
+    address_line1: editData?.address_line1 || "",
+    address_line2: editData?.address_line2 || "",
+    city: editData?.city || "",
+    state: editData?.state || "",
+    pincode: editData?.pincode || "",
+    contact_phone: editData?.contact_phone || "",
+    contact_email: editData?.contact_email || "",
+    total_capacity: editData?.total_capacity || 30,
+    num_classrooms: editData?.num_classrooms || 1,
+    num_computer_labs: editData?.num_computer_labs || 0,
+    has_projector: editData?.has_projector ?? true,
+    has_ac: editData?.has_ac ?? false,
+    has_library: editData?.has_library ?? false
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const payload = {
+        ...formData,
+        total_capacity: parseInt(formData.total_capacity) || 30,
+        num_classrooms: parseInt(formData.num_classrooms) || 1,
+        num_computer_labs: parseInt(formData.num_computer_labs) || 0
+      };
+      
+      if (editData) {
+        await axios.put(`${API}/resources/infrastructure/${editData.infra_id}`, payload);
+        toast.success("Center updated successfully");
+      } else {
+        await axios.post(`${API}/resources/infrastructure`, payload);
+        toast.success("Center added successfully");
+      }
+      onSuccess();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to save center");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader className="flex flex-row items-start justify-between">
+        <div>
+          <DialogTitle>{editData ? "Edit SDC/Center" : "Add New SDC/Center"}</DialogTitle>
+          <DialogDescription>Enter center details, address and facilities</DialogDescription>
+        </div>
+        <Button variant="ghost" size="icon" onClick={onCancel} className="h-8 w-8" type="button">
+          <X className="w-4 h-4" />
+        </Button>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        {/* Basic Info */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Center Name *</Label>
+            <Input 
+              value={formData.center_name}
+              onChange={(e) => setFormData({ ...formData, center_name: e.target.value })}
+              placeholder="Skill Center Jaipur"
+              required
+            />
+          </div>
+          <div>
+            <Label>Center Code *</Label>
+            <Input 
+              value={formData.center_code}
+              onChange={(e) => setFormData({ ...formData, center_code: e.target.value })}
+              placeholder="SDC-JAI-001"
+              required
+              disabled={!!editData}
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label>District *</Label>
+          <Input 
+            value={formData.district}
+            onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+            placeholder="Jaipur"
+            required
+          />
+        </div>
+
+        {/* Address */}
+        <div className="border border-border rounded-md p-4">
+          <Label className="text-base font-medium mb-3 block">Address Details</Label>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-sm">Address Line 1 *</Label>
+              <Input 
+                value={formData.address_line1}
+                onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })}
+                placeholder="123, Industrial Area"
+                required
+              />
+            </div>
+            <div>
+              <Label className="text-sm">Address Line 2</Label>
+              <Input 
+                value={formData.address_line2}
+                onChange={(e) => setFormData({ ...formData, address_line2: e.target.value })}
+                placeholder="Near Bus Stand"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label className="text-sm">City *</Label>
+                <Input 
+                  value={formData.city}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  placeholder="Jaipur"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-sm">State *</Label>
+                <Input 
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                  placeholder="Rajasthan"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-sm">Pincode *</Label>
+                <Input 
+                  value={formData.pincode}
+                  onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                  placeholder="302001"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Contact */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Contact Phone</Label>
+            <Input 
+              value={formData.contact_phone}
+              onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+              placeholder="0141-2345678"
+            />
+          </div>
+          <div>
+            <Label>Contact Email</Label>
+            <Input 
+              type="email"
+              value={formData.contact_email}
+              onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+              placeholder="center@example.com"
+            />
+          </div>
+        </div>
+
+        {/* Capacity */}
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <Label>Total Capacity *</Label>
+            <Input 
+              type="number"
+              value={formData.total_capacity}
+              onChange={(e) => setFormData({ ...formData, total_capacity: e.target.value })}
+              min="1"
+              required
+            />
+          </div>
+          <div>
+            <Label>Classrooms</Label>
+            <Input 
+              type="number"
+              value={formData.num_classrooms}
+              onChange={(e) => setFormData({ ...formData, num_classrooms: e.target.value })}
+              min="0"
+            />
+          </div>
+          <div>
+            <Label>Computer Labs</Label>
+            <Input 
+              type="number"
+              value={formData.num_computer_labs}
+              onChange={(e) => setFormData({ ...formData, num_computer_labs: e.target.value })}
+              min="0"
+            />
+          </div>
+        </div>
+
+        {/* Facilities */}
+        <div className="border border-border rounded-md p-4">
+          <Label className="text-base font-medium mb-3 block">Facilities</Label>
+          <div className="flex flex-wrap gap-6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox 
+                checked={formData.has_projector}
+                onCheckedChange={(checked) => setFormData({ ...formData, has_projector: checked })}
+              />
+              <span className="text-sm">Projector</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox 
+                checked={formData.has_ac}
+                onCheckedChange={(checked) => setFormData({ ...formData, has_ac: checked })}
+              />
+              <span className="text-sm">Air Conditioning</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox 
+                checked={formData.has_library}
+                onCheckedChange={(checked) => setFormData({ ...formData, has_library: checked })}
+              />
+              <span className="text-sm">Library</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" className="flex-1" disabled={loading}>
+            {loading ? "Saving..." : (editData ? "Update Center" : "Add Center")}
+          </Button>
+        </div>
+      </form>
+    </>
+  );
+};
