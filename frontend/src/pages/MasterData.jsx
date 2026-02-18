@@ -267,6 +267,10 @@ export default function MasterData({ user }) {
               <FileText className="w-4 h-4 mr-2" />
               Job Roles
             </TabsTrigger>
+            <TabsTrigger value="resources" data-testid="tab-resources">
+              <Users className="w-4 h-4 mr-2" />
+              Resources
+            </TabsTrigger>
           </TabsList>
 
           {/* Work Orders Tab */}
