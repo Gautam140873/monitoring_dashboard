@@ -274,6 +274,10 @@ class SDCInfrastructureMaster(BaseModel):
     has_projector: bool = True
     has_ac: bool = False
     has_library: bool = False
+    # Safety & Connectivity
+    has_biometric: bool = False
+    has_internet: bool = False
+    has_fire_safety: bool = False
     other_facilities: List[str] = []
     # Availability
     status: str = "available"  # available, in_use, maintenance
