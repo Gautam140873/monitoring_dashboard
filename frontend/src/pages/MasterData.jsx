@@ -923,10 +923,14 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
             <div>
               <Label>Select Job Roles ({selectedJobRoles.length}/{formData.num_job_roles})</Label>
               <Select 
-                onValueChange={addJobRole}
+                onValueChange={(value) => {
+                  console.log("Selected job role:", value);
+                  addJobRole(value);
+                }}
                 disabled={selectedJobRoles.length >= formData.num_job_roles}
+                value=""
               >
-                <SelectTrigger className="mt-1">
+                <SelectTrigger className="mt-1" data-testid="job-role-select">
                   <SelectValue placeholder={
                     selectedJobRoles.length >= formData.num_job_roles 
                       ? "Maximum job roles selected" 
@@ -935,12 +939,15 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
                 </SelectTrigger>
                 <SelectContent>
                   {jobRoles.filter(jr => !selectedJobRoles.find(s => s.job_role_id === jr.job_role_id)).map((jr) => (
-                    <SelectItem key={jr.job_role_id} value={jr.job_role_id}>
+                    <SelectItem key={jr.job_role_id} value={jr.job_role_id} data-testid={`job-role-option-${jr.job_role_id}`}>
                       {jr.job_role_code} - {jr.job_role_name} (Cat {jr.category}, ₹{jr.rate_per_hour}/hr)
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {jobRoles.length === 0 && (
+                <p className="text-xs text-red-500 mt-1">No job roles available. Please create job roles first.</p>
+              )}
             </div>
 
             {/* Selected Job Roles */}
