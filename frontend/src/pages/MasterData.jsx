@@ -416,7 +416,7 @@ export default function MasterData({ user }) {
                                       Create SDC
                                     </Button>
                                   </DialogTrigger>
-                                  <DialogContent className="max-w-xl">
+                                  <DialogContent className="max-w-xl" onInteractOutside={(e) => e.preventDefault()}>
                                     <SDCFromMasterForm 
                                       masterWO={mwo}
                                       onSuccess={() => {
