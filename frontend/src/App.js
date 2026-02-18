@@ -11,6 +11,7 @@ import SDCDetail from "@/pages/SDCDetail";
 import FinancialControl from "@/pages/FinancialControl";
 import Settings from "@/pages/Settings";
 import UserManagement from "@/pages/UserManagement";
+import MasterData from "@/pages/MasterData";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
