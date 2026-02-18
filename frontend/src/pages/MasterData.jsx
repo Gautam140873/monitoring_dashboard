@@ -706,6 +706,8 @@ const MasterWorkOrderForm = ({ jobRoles, onSuccess }) => {
       // Set default target as remaining or 0
       const defaultTarget = Math.min(remainingTarget, 30);
       setSelectedJobRoles([...selectedJobRoles, { ...jr, target: defaultTarget > 0 ? defaultTarget : 0 }]);
+      // Force Select to remount and clear selection
+      setSelectKey(prev => prev + 1);
     }
   };
 
