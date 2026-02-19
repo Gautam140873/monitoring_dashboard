@@ -1647,9 +1647,8 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
   const [availableManagers, setAvailableManagers] = useState([]);
   const [selectedInfra, setSelectedInfra] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
-  const [useExistingInfra, setUseExistingInfra] = useState(true);
   const [formData, setFormData] = useState({
-    district_name: masterWO.sdc_districts?.[0]?.district_name || "",
+    district_name: "",
     sdc_suffix: "",
     job_role_id: masterWO.job_roles?.[0]?.job_role_id || "",
     target_students: 30,
@@ -1680,10 +1679,13 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
     fetchResources();
   }, []);
 
-  // Filter infrastructure by selected district
-  const filteredInfra = availableInfra.filter(
-    infra => infra.district.toLowerCase() === formData.district_name.toLowerCase()
-  );
+  // Get all unique districts from available infrastructure
+  const availableDistricts = [...new Set(availableInfra.map(i => i.district))];
+  
+  // Filter infrastructure by selected district (if any)
+  const filteredInfra = formData.district_name 
+    ? availableInfra.filter(infra => infra.district.toLowerCase() === formData.district_name.toLowerCase())
+    : availableInfra;
 
   const selectedJobRole = masterWO.job_roles?.find(jr => jr.job_role_id === formData.job_role_id);
   const contractValue = selectedJobRole 
