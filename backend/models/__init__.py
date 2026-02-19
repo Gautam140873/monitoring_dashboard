@@ -1,12 +1,12 @@
 """
 Models package for SkillFlow CRM
 """
-from .user import User
-from .sdc import SDC
-from .work_order import WorkOrder, TrainingRoadmap, Invoice, Holiday, Alert
-from .master_data import JobRoleMaster, MasterWorkOrder
-from .resources import TrainerMaster, CenterManagerMaster, SDCInfrastructureMaster
-from .schemas import (
+from models.user import User
+from models.sdc import SDC
+from models.work_order import WorkOrder, TrainingRoadmap, Invoice, Holiday, Alert
+from models.master_data import JobRoleMaster, MasterWorkOrder
+from models.resources import TrainerMaster, CenterManagerMaster, SDCInfrastructureMaster
+from models.schemas import (
     SessionRequest,
     SDCCreate,
     WorkOrderCreate,
