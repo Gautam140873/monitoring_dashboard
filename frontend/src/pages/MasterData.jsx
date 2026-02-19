@@ -73,11 +73,8 @@ import {
 } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Category rates
-const CATEGORY_RATES = {
-  "A": 46,
-  "B": 42
-};
+// Import extracted components
+import { JobRoleForm, MasterDataSkeleton, CATEGORY_RATES } from "@/components/master-data";
 
 export default function MasterData({ user }) {
   const navigate = useNavigate();
