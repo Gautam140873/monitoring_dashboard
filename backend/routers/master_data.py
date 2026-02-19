@@ -665,7 +665,13 @@ async def create_sdc_from_master(master_wo_id: str, sdc_data: SDCFromMasterCreat
         "sdc_name": sdc_name,
         "work_order": work_order,
         "contract_value": contract_value,
-        "calculation": f"{sdc_data.target_students} students × {training_hours} hrs × ₹{rate}/hr"
+        "calculation": f"{sdc_data.target_students} students × {training_hours} hrs × ₹{rate}/hr",
+        "allocation": {
+            "allocated": sdc_data.target_students,
+            "remaining_after": allocation_result.get("remaining_after", 0),
+            "job_role": allocation_result.get("job_role")
+        },
+        "resources_locked": len(locked_resources)
     }
 
 
