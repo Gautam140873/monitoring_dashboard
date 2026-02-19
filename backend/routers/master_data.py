@@ -567,23 +567,35 @@ async def create_sdc_from_master(master_wo_id: str, sdc_data: SDCFromMasterCreat
         }
         await db.sdcs.insert_one(sdc.copy())
     
-    # Assign resources if provided
+    # Lock resources using the resource locking service
     if sdc_data.infra_id:
-        await db.sdc_infrastructure.update_one(
-            {"infra_id": sdc_data.infra_id},
-            {"$set": {"status": "in_use", "assigned_work_order_id": master_wo_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        await lock_resource(
+            resource_type="infrastructure",
+            resource_id=sdc_data.infra_id,
+            sdc_id=sdc_id,
+            work_order_id=master_wo_id,
+            user_id=user.user_id,
+            user_email=user.email
         )
     
     if sdc_data.manager_id:
-        await db.center_managers.update_one(
-            {"manager_id": sdc_data.manager_id},
-            {"$set": {"status": "assigned", "assigned_sdc_id": sdc_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        await lock_resource(
+            resource_type="manager",
+            resource_id=sdc_data.manager_id,
+            sdc_id=sdc_id,
+            work_order_id=master_wo_id,
+            user_id=user.user_id,
+            user_email=user.email
         )
     
     if sdc_data.trainer_id:
-        await db.trainers.update_one(
-            {"trainer_id": sdc_data.trainer_id},
-            {"$set": {"status": "assigned", "assigned_sdc_id": sdc_id, "assigned_work_order_id": master_wo_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        await lock_resource(
+            resource_type="trainer",
+            resource_id=sdc_data.trainer_id,
+            sdc_id=sdc_id,
+            work_order_id=master_wo_id,
+            user_id=user.user_id,
+            user_email=user.email
         )
     
     training_hours = job_role.get("total_training_hours", 0)
@@ -619,6 +631,17 @@ async def create_sdc_from_master(master_wo_id: str, sdc_data: SDCFromMasterCreat
     
     await db.work_orders.insert_one(work_order.copy())
     await create_training_roadmap(work_order["work_order_id"], sdc_id, sdc_data.target_students)
+    
+    # Record allocation in target ledger
+    await record_allocation(
+        master_wo_id=master_wo_id,
+        job_role_id=sdc_data.job_role_id,
+        sdc_id=sdc_id,
+        work_order_id=work_order["work_order_id"],
+        num_students=sdc_data.target_students,
+        user_id=user.user_id,
+        user_email=user.email
+    )
     
     sdc_districts = master_wo.get("sdc_districts", [])
     for dist in sdc_districts:
