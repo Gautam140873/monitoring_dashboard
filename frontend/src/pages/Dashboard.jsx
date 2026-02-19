@@ -347,6 +347,9 @@ export default function Dashboard({ user }) {
         {/* SDC Status Metrics */}
         <SDCStatusMetrics sdcSummaries={sdc_summaries} />
 
+        {/* Burn-down Dashboard */}
+        <BurndownDashboard />
+
         {/* Process Stages & Deliverables - Side by Side */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Process Stages - 2/3 width */}
