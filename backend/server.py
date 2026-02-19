@@ -3087,24 +3087,36 @@ async def get_sdc_process_status(sdc_id: str, user: User = Depends(get_current_u
     # Calculate flow status (can a stage be started based on previous stage)
     stages_list = []
     prev_stage_status = "completed"  # First stage can always start
+    prev_stage_completed = target_students  # First stage max is target_students
     
-    for stage in PROCESS_STAGES:
+    stage_order = ["mobilization", "training", "ojt", "assessment", "placement"]
+    
+    for idx, stage in enumerate(PROCESS_STAGES):
         stage_data = process_data["stages"].get(stage["stage_id"], {})
         
         # Determine if this stage can be started
         can_start = prev_stage_status in ["completed", "in_progress"]
         
-        # Calculate progress percentage
-        target = stage_data.get("target", target_students)
+        # Calculate max allowed for this stage
+        # Mobilization: max = target_students
+        # Other stages: max = previous stage completed
+        if idx == 0:
+            max_allowed = target_students
+        else:
+            max_allowed = prev_stage_completed
+        
         completed = stage_data.get("completed", 0)
-        progress_percent = round((completed / target * 100) if target > 0 else 0, 1)
+        
+        # Progress percentage based on max_allowed (not target)
+        progress_percent = round((completed / max_allowed * 100) if max_allowed > 0 else 0, 1)
         
         stages_list.append({
             **stage,
-            "target": target,
+            "target": target_students,  # Original target
+            "max_allowed": max_allowed,  # Max based on previous stage
             "completed": completed,
             "in_progress": stage_data.get("in_progress", 0),
-            "pending": max(0, target - completed - stage_data.get("in_progress", 0)),
+            "pending": max(0, max_allowed - completed - stage_data.get("in_progress", 0)),
             "progress_percent": progress_percent,
             "status": stage_data.get("status", "pending"),
             "can_start": can_start,
@@ -3114,6 +3126,7 @@ async def get_sdc_process_status(sdc_id: str, user: User = Depends(get_current_u
         })
         
         prev_stage_status = stage_data.get("status", "pending")
+        prev_stage_completed = completed  # Next stage's max is this stage's completed
     
     # Deliverables list
     deliverables_list = []
