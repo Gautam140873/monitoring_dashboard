@@ -709,41 +709,52 @@ export default function SDCDetail({ user }) {
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Update Process Stages</DialogTitle>
-              <DialogDescription>Update progress and dates for each stage</DialogDescription>
+              <DialogDescription>Update progress and dates for each stage. Each stage's completed count cannot exceed the previous stage.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 mt-4">
               {processStatus?.stages?.map((stage, idx) => {
                 const isLocked = !stage.can_start && stage.status === "pending";
+                const maxAllowed = stage.max_allowed || stage.target;
                 return (
                   <div 
                     key={stage.stage_id}
                     className={`p-4 rounded-lg border ${isLocked ? "opacity-50 bg-gray-50" : "bg-background"}`}
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <div className="font-semibold">{idx + 1}. {stage.name}</div>
+                      <div>
+                        <span className="font-semibold">{idx + 1}. {stage.name}</span>
+                        <span className="text-xs text-muted-foreground ml-2">
+                          (Max allowed: {maxAllowed})
+                        </span>
+                      </div>
                       {isLocked && <Badge variant="outline" className="text-xs">🔒 Locked</Badge>}
                     </div>
                     {!isLocked && (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
-                          <Label className="text-xs">Completed</Label>
+                          <Label className="text-xs">Completed (max: {maxAllowed})</Label>
                           <Input 
                             type="number"
                             className="h-8"
                             defaultValue={stage.completed}
-                            max={stage.target}
+                            max={maxAllowed}
                             min={0}
                             onBlur={(e) => {
                               const val = parseInt(e.target.value);
                               if (!isNaN(val) && val !== stage.completed) {
+                                if (val > maxAllowed) {
+                                  toast.error(`Cannot exceed ${maxAllowed} (previous stage completed)`);
+                                  e.target.value = stage.completed;
+                                  return;
+                                }
                                 handleUpdateStage(stage.stage_id, { completed: val });
                               }
                             }}
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">Target</Label>
-                          <Input type="number" className="h-8" value={stage.target} disabled />
+                          <Label className="text-xs">Max Allowed</Label>
+                          <Input type="number" className="h-8" value={maxAllowed} disabled />
                         </div>
                         <div>
                           <Label className="text-xs">Start Date</Label>
