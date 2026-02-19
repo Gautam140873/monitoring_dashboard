@@ -446,6 +446,9 @@ export default function SDCDetail({ user }) {
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-semibold">{stage.name}</span>
                             {isLocked && <span className="text-xs text-gray-500">🔒</span>}
+                            <span className="text-xs text-muted-foreground">
+                              (Max: {stage.max_allowed || stage.target})
+                            </span>
                           </div>
                           {/* Progress Bar */}
                           <div className="flex items-center gap-2">
@@ -453,8 +456,8 @@ export default function SDCDetail({ user }) {
                               value={stage.progress_percent} 
                               className={`h-2 flex-1 ${stage.status === "completed" ? "[&>div]:bg-emerald-500" : ""}`}
                             />
-                            <span className="font-mono text-sm w-20 text-right">
-                              {stage.completed}/{stage.target}
+                            <span className="font-mono text-sm w-24 text-right">
+                              {stage.completed}/{stage.max_allowed || stage.target}
                             </span>
                           </div>
                         </div>
