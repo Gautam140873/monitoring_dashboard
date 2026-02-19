@@ -107,7 +107,7 @@ export default function SDCDetail({ user }) {
   const [loading, setLoading] = useState(true);
   const [sdcData, setSdcData] = useState(null);
   const [processStatus, setProcessStatus] = useState(null);
-  const [activeTab, setActiveTab] = useState("process");
+  const [activeTab, setActiveTab] = useState("work-orders");
   const [showWorkOrderDialog, setShowWorkOrderDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showStartDateDialog, setShowStartDateDialog] = useState(false);
