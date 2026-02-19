@@ -16,31 +16,27 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 
 ## Architecture
 
-### Backend (FastAPI + MongoDB) - MODULAR STRUCTURE (Feb 19, 2026)
+### Backend (FastAPI + MongoDB) - MODULAR STRUCTURE
 ```
 /app/backend/
-├── server.py           # Main entry point (533 lines - reduced from 3,997)
+├── server.py           # Main entry point (533 lines)
 ├── database.py         # MongoDB connection
 ├── config.py           # Constants, RBAC, stage definitions
 ├── models/             # Pydantic data models
-│   ├── user.py
-│   ├── sdc.py
-│   ├── work_order.py
-│   ├── master_data.py
-│   ├── resources.py
-│   └── schemas.py      # Request/Response schemas
 ├── services/           # Business logic
 │   ├── auth.py         # Authentication & RBAC
 │   ├── audit.py        # Audit logging
 │   ├── soft_delete.py  # Soft delete & recovery
-│   └── utils.py        # Date calculations, helpers
+│   ├── utils.py        # Date calculations, helpers
+│   └── ledger.py       # Target Ledger, Resource Locking, Burndown ✅ NEW
 └── routers/            # API endpoints
     ├── auth.py         # /api/auth/*
     ├── users.py        # /api/users/*
     ├── master_data.py  # /api/master/*
     ├── resources.py    # /api/resources/*
     ├── sdcs.py         # /api/sdcs/*
-    └── dashboard.py    # /api/dashboard/*
+    ├── dashboard.py    # /api/dashboard/*
+    └── ledger.py       # /api/ledger/* ✅ NEW
 ```
 
 ### Frontend (React + TailwindCSS + Shadcn/UI)
@@ -49,90 +45,108 @@ Build a Skill Development CRM & Billing Controller Dashboard to manage and monit
 
 ## What's Been Implemented
 
-### Backend Refactoring ✅ (Feb 19, 2026) - P0 COMPLETED
-- [x] **Modular Architecture**: server.py reduced from 3,997 to 533 lines (86% reduction)
+### Target Ledger & Resource Locking ✅ (Feb 19, 2026) - P0 COMPLETED
+- [x] **Target Ledger System**: Tracks student allocation from Work Orders to SDCs
+  - `GET /api/ledger/target/{master_wo_id}` - Get allocation by job role
+  - `POST /api/ledger/validate-allocation` - Validate before creating SDC
+  - Over-allocation prevention with detailed error messages
+- [x] **Resource Locking**: Prevents double-booking of Trainers/Managers/Infrastructure
+  - `GET /api/ledger/resource/check/{type}/{id}` - Check availability
+  - `POST /api/ledger/resource/lock` - Lock resource (returns 409 if conflict)
+  - `POST /api/ledger/resource/release/{type}/{id}` - Release locked resource
+  - `GET /api/ledger/resource/summary` - Resource counts
+- [x] **SDC Creation Integration**: Validation + locking applied automatically
+
+### Burn-down Dashboard ✅ (Feb 19, 2026) - P1 COMPLETED
+- [x] **Backend API**: `GET /api/ledger/burndown` with pipeline data
+- [x] **Frontend Component**: BurndownDashboard with:
+  - Pipeline bar visualization (Unallocated → Allocated → Mobilized → In Training → Placed)
+  - Work Order selector dropdown
+  - Summary stats cards
+  - Progress indicator
+
+### Dashboard Redesign ✅ (Feb 19, 2026)
+- [x] **SDC Status Metrics**: Total Registered, Active/Available, Engaged/Busy, Inactive
+- [x] **Collapsible SDC Directory**: Accordion-style grouped by status
+  - Search and filter functionality
+  - Status dots (pulsing green for available, amber for engaged)
+  - Expand to see details, progress, financial summary
+  - Assign button disabled for non-available SDCs
+- [x] **Process Stages & Deliverables**: Separated into side-by-side cards
+
+### Backend Refactoring ✅ (Feb 19, 2026)
+- [x] **Modular Architecture**: server.py reduced from 3,997 to 533 lines
 - [x] **Separated Models**: 6 model files with Pydantic schemas
-- [x] **Service Layer**: Auth, audit, soft delete, and utility services
-- [x] **Route Modules**: 6 router files for clean API organization
-- [x] **All Tests Passing**: 34 API endpoint tests verified
-- [x] **API Version**: 3.0.0 (Modular)
+- [x] **Service Layer**: Auth, audit, soft delete, utility, ledger services
+- [x] **Route Modules**: 7 router files for clean API organization
 
 ### System Reliability Upgrades ✅ (Feb 18, 2026)
-- [x] **Enhanced RBAC**: 4-tier role system (Admin → HO → Manager → SDC) with permission matrix
-- [x] **Audit Logging**: Complete audit trail for all CRUD operations with old/new value tracking
-- [x] **Soft Delete System**: 30-day recovery window for accidentally deleted records
-- [x] **Database Indexes**: Auto-created on startup for optimized query performance
-- [x] **Error Boundary**: React error boundary with retry mechanism for graceful error handling
+- [x] **Enhanced RBAC**: 4-tier role system (Admin → HO → Manager → SDC)
+- [x] **Audit Logging**: Complete audit trail for all CRUD operations
+- [x] **Soft Delete System**: 30-day recovery window
+- [x] **Database Indexes**: Auto-created on startup
+- [x] **Error Boundary**: React error boundary with retry mechanism
 
 ### Core Features ✅
 - [x] Google OAuth authentication with role-based access
-- [x] Dashboard Overview with 5 financial metrics (Portfolio, Billed, Collected, Outstanding, Variance)
-- [x] 7-stage Training Roadmap Progress visualization
-- [x] SDC cards with progress, blockers, and overdue indicators
-- [x] Work Order creation (auto-creates SDC and training roadmap)
-- [x] Start Date setting with auto End Date calculation
-- [x] Invoice creation with variance tracking (alerts if >10%)
-- [x] Payment recording with PAID trigger for completed stages
-- [x] User role management (HO/SDC assignment)
-- [x] Holiday management (global + local holidays)
-- [x] Alert generation for overdue work orders and high variance
-
-### Master Data System ✅ (Feb 18, 2026)
-- [x] Job Role Master with category-based rates (Cat A: ₹46/hr, Cat B: ₹42/hr)
-- [x] Master Work Orders with multiple job roles and SDC districts
-- [x] SDC creation from Master Work Order with auto-calculated contract values
-- [x] Resource Masters (Trainers, Managers, Infrastructure)
-- [x] Resource Assignment and Release on Work Order completion
-
-## RBAC Permission System
-| Role | Level | Permissions |
-|------|-------|-------------|
-| Admin | 100 | Full system access, all permissions |
-| HO | 80 | SDCs, Work Orders, Resources, Master Data, Reports, Settings, Audit Read, Restore Deleted |
-| Manager | 50 | Read/Update SDCs, Work Orders, Resources, Reports (team level) |
-| SDC | 20 | Read/Update own SDC only, Read-only for resources and master data |
+- [x] Dashboard Overview with 5 financial metrics
+- [x] 5-stage Training Roadmap Progress visualization
+- [x] Work Order creation with auto SDC and training roadmap
+- [x] Invoice creation with variance tracking
+- [x] Payment recording with PAID trigger
+- [x] User role management
+- [x] Holiday management (global + local)
+- [x] Alert generation
 
 ## Process Stages (5-Stage Pipeline)
 1. **Mobilization** - Student registration and enrollment
-2. **Training** - Classroom training phase (depends on Mobilization)
-3. **OJT** - On-the-Job Training (depends on Training)
-4. **Assessment** - Evaluation and certification (depends on OJT)
-5. **Placement** - Job placement (depends on Assessment)
+2. **Training** - Classroom training phase
+3. **OJT** - On-the-Job Training
+4. **Assessment** - Evaluation and certification
+5. **Placement** - Job placement
 
 ## Prioritized Backlog
 
-### P0 (Critical) - IN PROGRESS
-- [ ] **Target Ledger System**: Track student allocation from Work Orders to SDCs, prevent over-allocation
-- [ ] **Resource Locking**: Check availability to prevent double-booking of Trainers/Managers
-
-### P1 (High Priority) - UPCOMING
-- [ ] **Sequential Workflow Engine**: Enforce strict stage completion (Training ≤ Mobilization)
-- [ ] **Burn-down Dashboard**: Visualize Work Order progress (Unallocated → In-Training → Placed)
-- [ ] **Refined RBAC**: Center Managers can only edit their assigned SDC
-
-### P2 (Nice to Have)
+### P2 (Nice to Have) - UPCOMING
+- [ ] Refined RBAC: Center Managers can only edit their assigned SDC
 - [ ] Holiday Management UI in Settings
 - [ ] End-to-end Gmail verification
 - [ ] WhatsApp/SMS notifications
 - [ ] PDF invoice generation
 
+## New API Endpoints (Ledger)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/ledger/target/{mwo_id}` | GET | Get target allocation ledger |
+| `/api/ledger/validate-allocation` | POST | Validate allocation request |
+| `/api/ledger/all-ledgers` | GET | Get all active ledgers |
+| `/api/ledger/resource/check/{type}/{id}` | GET | Check resource availability |
+| `/api/ledger/resource/lock` | POST | Lock a resource |
+| `/api/ledger/resource/release/{type}/{id}` | POST | Release a resource |
+| `/api/ledger/resource/summary` | GET | Get resource counts |
+| `/api/ledger/resource/history/{type}/{id}` | GET | Get booking history |
+| `/api/ledger/burndown` | GET | Get burn-down dashboard data |
+| `/api/ledger/burndown/{mwo_id}` | GET | Get burn-down for specific WO |
+
 ## Technical Notes
 - **Backend API Version**: 3.0.0 (Modular)
-- **MongoDB Collections**: users, user_sessions, sdcs, work_orders, training_roadmaps, invoices, holidays, alerts, job_role_master, master_work_orders, trainers, center_managers, sdc_infrastructure, audit_logs, sdc_processes
+- **MongoDB Collections**: users, user_sessions, sdcs, work_orders, training_roadmaps, invoices, holidays, alerts, job_role_master, master_work_orders, trainers, center_managers, sdc_infrastructure, audit_logs, sdc_processes, target_ledger, resource_bookings
 - **Preview URL**: https://training-tracker-63.preview.emergentagent.com
 - **Test User**: gautam.hinger@gmail.com (role: ho)
 
 ## Files of Reference
-- `/app/backend/server.py` - Main entry point (modular)
-- `/app/backend/routers/*.py` - API route handlers
-- `/app/backend/models/*.py` - Pydantic models
-- `/app/backend/services/*.py` - Business logic
-- `/app/frontend/src/pages/MasterData.jsx` - Master Data UI
-- `/app/frontend/src/pages/SDCDetail.jsx` - SDC process view
+- `/app/backend/services/ledger.py` - Target Ledger, Resource Locking, Burndown logic
+- `/app/backend/routers/ledger.py` - Ledger API endpoints
+- `/app/backend/routers/master_data.py` - Updated with allocation validation
+- `/app/frontend/src/pages/Dashboard.jsx` - Updated with BurndownDashboard, SDCDirectory
+
+## Test Reports
+- `/app/test_reports/iteration_13.json` - All 19 ledger tests passed
+- `/app/backend/tests/test_ledger_features.py` - Ledger test suite
 
 ## Next Action Items
-1. 🔴 **P0**: Implement Target Ledger for allocation tracking
-2. 🔴 **P0**: Add Resource Locking to prevent double-booking
-3. 🟡 **P1**: Build Burn-down Dashboard visualization
-4. 🟡 **P1**: Enforce sequential stage validation in backend
-5. 🟡 **P1**: Tighten RBAC for Center Managers
+1. 🟢 **P2**: Refined RBAC for Center Managers
+2. 🟢 **P2**: Holiday Management UI
+3. 🟢 **P2**: Gmail integration verification
+4. 🟢 **P2**: PDF invoice generation
