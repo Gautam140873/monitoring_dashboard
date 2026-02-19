@@ -1870,30 +1870,12 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
           <p className="text-xs text-muted-foreground mt-1">Leave empty for single SDC in district</p>
         </div>
 
-          {selectedInfra && (
-            <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-md">
-              <div className="flex items-center gap-2 text-emerald-700 font-medium text-sm">
-                <CheckCircle className="w-4 h-4" />
-                Selected: {selectedInfra.center_name}
-              </div>
-              <div className="text-xs text-emerald-600 mt-1">
-                {selectedInfra.address_line1}, {selectedInfra.city} - {selectedInfra.pincode}
-                <br />
-                Capacity: {selectedInfra.total_capacity} students • 
-                {selectedInfra.num_classrooms} classroom{selectedInfra.num_classrooms > 1 ? 's' : ''}
-                {selectedInfra.has_projector && " • Projector"}
-                {selectedInfra.has_ac && " • AC"}
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Select Center Manager from Resources */}
         <div className="border border-border rounded-md p-4 bg-muted/30">
           <div className="flex items-center justify-between mb-3">
             <Label className="text-base font-medium flex items-center gap-2">
               <UserCog className="w-4 h-4" />
-              Select Center Manager
+              Step 2: Select Center Manager
             </Label>
             <Badge variant="outline" className="text-xs">
               {availableManagers.length} available
@@ -1911,7 +1893,7 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
                     <div className="flex flex-col">
                       <span className="font-medium">{manager.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {manager.phone} • {manager.city}
+                        {manager.phone} • {manager.city || "N/A"}
                       </span>
                     </div>
                   </SelectItem>
