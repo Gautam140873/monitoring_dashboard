@@ -430,11 +430,80 @@ async def complete_master_work_order(master_wo_id: str, user: User = Depends(req
 
 @router.post("/work-orders/{master_wo_id}/sdcs")
 async def create_sdc_from_master(master_wo_id: str, sdc_data: SDCFromMasterCreate, user: User = Depends(require_ho_role)):
-    """Create/Open SDC from Master Work Order (HO only)"""
+    """Create/Open SDC from Master Work Order (HO only) with allocation validation and resource locking"""
     master_wo = await db.master_work_orders.find_one({"master_wo_id": master_wo_id}, {"_id": 0})
     if not master_wo:
         raise HTTPException(status_code=404, detail="Master Work Order not found")
     
+    # ==================== TARGET LEDGER VALIDATION ====================
+    # Validate allocation before proceeding
+    allocation_result = await validate_allocation(
+        master_wo_id=master_wo_id,
+        job_role_id=sdc_data.job_role_id,
+        requested_students=sdc_data.target_students
+    )
+    
+    if not allocation_result["is_valid"]:
+        raise HTTPException(
+            status_code=400, 
+            detail={
+                "error": "Over-allocation prevented",
+                "message": allocation_result["error"],
+                "remaining": allocation_result.get("remaining", 0),
+                "requested": sdc_data.target_students
+            }
+        )
+    
+    # ==================== RESOURCE LOCKING ====================
+    # Check and lock resources if provided
+    locked_resources = []
+    
+    # Check Infrastructure availability
+    if sdc_data.infra_id:
+        infra_check = await check_resource_availability("infrastructure", sdc_data.infra_id)
+        if not infra_check["is_available"]:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "Resource conflict",
+                    "resource_type": "infrastructure",
+                    "message": infra_check.get("error"),
+                    "conflict": infra_check.get("conflict")
+                }
+            )
+        locked_resources.append(("infrastructure", sdc_data.infra_id))
+    
+    # Check Manager availability
+    if sdc_data.manager_id:
+        manager_check = await check_resource_availability("manager", sdc_data.manager_id)
+        if not manager_check["is_available"]:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "Resource conflict",
+                    "resource_type": "manager",
+                    "message": manager_check.get("error"),
+                    "conflict": manager_check.get("conflict")
+                }
+            )
+        locked_resources.append(("manager", sdc_data.manager_id))
+    
+    # Check Trainer availability
+    if sdc_data.trainer_id:
+        trainer_check = await check_resource_availability("trainer", sdc_data.trainer_id)
+        if not trainer_check["is_available"]:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "Resource conflict",
+                    "resource_type": "trainer",
+                    "message": trainer_check.get("error"),
+                    "conflict": trainer_check.get("conflict")
+                }
+            )
+        locked_resources.append(("trainer", sdc_data.trainer_id))
+    
+    # ==================== CONTINUE WITH SDC CREATION ====================
     job_role = None
     for jr in master_wo.get("job_roles", []):
         if jr["job_role_id"] == sdc_data.job_role_id:
