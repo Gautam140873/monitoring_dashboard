@@ -1645,6 +1645,7 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [availableInfra, setAvailableInfra] = useState([]);
   const [availableManagers, setAvailableManagers] = useState([]);
+  const [allocationStatus, setAllocationStatus] = useState(null);
   const [selectedInfra, setSelectedInfra] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
   const [formData, setFormData] = useState({
@@ -1662,22 +1663,46 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
     pincode: ""
   });
 
-  // Fetch available infrastructure and managers
+  // Fetch available infrastructure, managers, and allocation status
   useEffect(() => {
-    const fetchResources = async () => {
+    const fetchData = async () => {
       try {
-        const [infraRes, managersRes] = await Promise.all([
+        const [infraRes, managersRes, allocationRes] = await Promise.all([
           axios.get(`${API}/resources/infrastructure/available`),
-          axios.get(`${API}/resources/managers/available`)
+          axios.get(`${API}/resources/managers/available`),
+          axios.get(`${API}/master/work-orders/${masterWO.master_wo_id}/allocation-status`)
         ]);
         setAvailableInfra(infraRes.data);
         setAvailableManagers(managersRes.data);
+        setAllocationStatus(allocationRes.data);
+        
+        // Auto-set target students based on remaining allocation for first job role
+        if (allocationRes.data?.job_roles?.length > 0) {
+          const firstJR = allocationRes.data.job_roles[0];
+          const numSDCs = masterWO.num_sdcs || 1;
+          const suggestedTarget = Math.ceil(firstJR.remaining / Math.max(1, numSDCs - allocationRes.data.sdcs_created));
+          setFormData(prev => ({
+            ...prev,
+            target_students: Math.min(suggestedTarget, firstJR.remaining) || 30
+          }));
+        }
       } catch (error) {
-        console.error("Error fetching resources:", error);
+        console.error("Error fetching data:", error);
       }
     };
-    fetchResources();
-  }, []);
+    fetchData();
+  }, [masterWO.master_wo_id, masterWO.num_sdcs]);
+
+  // Get allocation info for selected job role
+  const selectedJobRoleAllocation = allocationStatus?.job_roles?.find(
+    jr => jr.job_role_id === formData.job_role_id
+  );
+  
+  // Calculate suggested target based on remaining SDCs
+  const remainingSDCs = Math.max(1, (masterWO.num_sdcs || 1) - (allocationStatus?.sdcs_created || 0));
+  const suggestedTargetPerSDC = selectedJobRoleAllocation 
+    ? Math.ceil(selectedJobRoleAllocation.remaining / remainingSDCs)
+    : 30;
 
   // Get all unique districts from available infrastructure
   const availableDistricts = [...new Set(availableInfra.map(i => i.district))];
@@ -1692,10 +1717,28 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
     ? formData.target_students * selectedJobRole.total_training_hours * selectedJobRole.rate_per_hour 
     : 0;
 
+  // Validate target doesn't exceed remaining allocation
+  const isTargetValid = selectedJobRoleAllocation 
+    ? formData.target_students <= selectedJobRoleAllocation.remaining 
+    : true;
+
   // Generate SDC name preview
   const sdcNamePreview = formData.district_name 
     ? `SDC_${formData.district_name.toUpperCase().replace(/\s/g, '_')}${formData.sdc_suffix || ''}`
     : '';
+
+  // Handle job role change - update target to suggested value
+  const handleJobRoleChange = (jobRoleId) => {
+    const jrAllocation = allocationStatus?.job_roles?.find(jr => jr.job_role_id === jobRoleId);
+    const suggested = jrAllocation 
+      ? Math.min(Math.ceil(jrAllocation.remaining / remainingSDCs), jrAllocation.remaining)
+      : 30;
+    setFormData({ 
+      ...formData, 
+      job_role_id: jobRoleId,
+      target_students: suggested || 30
+    });
+  };
 
   // Handle infrastructure selection - auto-fill ALL details
   const handleInfraSelect = (infraId) => {
