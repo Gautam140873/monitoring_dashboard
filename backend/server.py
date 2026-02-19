@@ -3162,6 +3162,12 @@ async def update_process_stage(
     if stage_id not in valid_stages:
         raise HTTPException(status_code=400, detail=f"Invalid stage_id. Must be one of: {valid_stages}")
     
+    # Get SDC target students
+    sdc = await db.sdcs.find_one({"sdc_id": sdc_id}, {"_id": 0, "target_students": 1})
+    if not sdc:
+        raise HTTPException(status_code=404, detail="SDC not found")
+    target_students = sdc.get("target_students", 0)
+    
     # Get or create process data
     process_data = await db.sdc_processes.find_one({"sdc_id": sdc_id})
     if not process_data:
@@ -3169,15 +3175,59 @@ async def update_process_stage(
         await get_sdc_process_status(sdc_id, user)
         process_data = await db.sdc_processes.find_one({"sdc_id": sdc_id})
     
+    # VALIDATION: Each stage's completed count cannot exceed:
+    # - Mobilization: <= target_students
+    # - Training: <= Mobilization completed
+    # - OJT: <= Training completed
+    # - Assessment: <= OJT completed
+    # - Placement: <= Assessment completed
+    
+    if completed is not None:
+        stages_data = process_data.get("stages", {})
+        
+        # Define stage order and dependencies
+        stage_order = ["mobilization", "training", "ojt", "assessment", "placement"]
+        stage_idx = stage_order.index(stage_id) if stage_id in stage_order else -1
+        
+        if stage_idx == 0:
+            # Mobilization - cannot exceed target students
+            max_allowed = target_students
+            if completed > max_allowed:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Mobilization cannot exceed target students ({target_students})"
+                )
+        elif stage_idx > 0:
+            # Get previous stage's completed count
+            prev_stage_id = stage_order[stage_idx - 1]
+            prev_completed = stages_data.get(prev_stage_id, {}).get("completed", 0)
+            
+            if completed > prev_completed:
+                prev_stage_name = next((s["name"] for s in PROCESS_STAGES if s["stage_id"] == prev_stage_id), prev_stage_id)
+                current_stage_name = next((s["name"] for s in PROCESS_STAGES if s["stage_id"] == stage_id), stage_id)
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"{current_stage_name} ({completed}) cannot exceed {prev_stage_name} completed ({prev_completed})"
+                )
+    
     # Build update
     update_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
     
     if completed is not None:
         update_fields[f"stages.{stage_id}.completed"] = completed
+        # Calculate max allowed for this stage
+        stages_data = process_data.get("stages", {})
+        stage_order = ["mobilization", "training", "ojt", "assessment", "placement"]
+        stage_idx = stage_order.index(stage_id) if stage_id in stage_order else -1
+        
+        if stage_idx == 0:
+            max_for_stage = target_students
+        else:
+            prev_stage_id = stage_order[stage_idx - 1]
+            max_for_stage = stages_data.get(prev_stage_id, {}).get("completed", 0)
+        
         # Auto-update status based on completion
-        sdc = await db.sdcs.find_one({"sdc_id": sdc_id}, {"_id": 0, "target_students": 1})
-        target = sdc.get("target_students", 0)
-        if completed >= target:
+        if completed >= max_for_stage and max_for_stage > 0:
             update_fields[f"stages.{stage_id}.status"] = "completed"
         elif completed > 0:
             update_fields[f"stages.{stage_id}.status"] = "in_progress"
