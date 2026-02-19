@@ -99,3 +99,54 @@ def require_permission(permission: str):
             )
         return user
     return permission_checker
+
+
+async def check_sdc_access(user: User, sdc_id: str, action: str = "read") -> bool:
+    """
+    Check if user has access to a specific SDC.
+    
+    Refined RBAC Rules:
+    - Admin/HO: Full access to all SDCs
+    - Manager: Can only edit their assigned SDC, read-only for others
+    - SDC: Can only access their assigned SDC
+    """
+    # Admin and HO have full access
+    if user.role in ["admin", "ho"]:
+        return True
+    
+    # Manager role - can edit only their assigned SDC
+    if user.role == "manager":
+        if action == "read":
+            return True  # Managers can read all SDCs
+        elif action in ["update", "delete"]:
+            # Check if this manager is assigned to this SDC
+            sdc = await db.sdcs.find_one({"sdc_id": sdc_id}, {"_id": 0})
+            if sdc:
+                # Check if user email matches manager_email or if user is assigned
+                if user.assigned_sdc_id == sdc_id:
+                    return True
+                if sdc.get("manager_email") == user.email:
+                    return True
+            return False
+    
+    # SDC role - can only access their assigned SDC
+    if user.role == "sdc":
+        return user.assigned_sdc_id == sdc_id
+    
+    return False
+
+
+async def require_sdc_access(sdc_id: str, action: str = "read"):
+    """Dependency factory for SDC access control"""
+    async def checker(user: User = Depends(get_current_user)) -> User:
+        has_access = await check_sdc_access(user, sdc_id, action)
+        if not has_access:
+            if action == "read":
+                raise HTTPException(status_code=403, detail="You don't have access to this SDC")
+            else:
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"You don't have permission to {action} this SDC. Only assigned managers can modify."
+                )
+        return user
+    return checker
