@@ -1969,55 +1969,6 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
           </div>
         </div>
 
-        {/* Manual Address Entry (if no infra selected) */}
-        {!selectedInfra && (
-          <div className="border border-border rounded-md p-4">
-            <Label className="text-base font-medium mb-2 block">Address Details (Manual Entry)</Label>
-            <div className="space-y-3">
-              <Input 
-                value={formData.address_line1}
-                onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })}
-                placeholder="Address Line 1"
-              />
-              <Input 
-                value={formData.address_line2}
-                onChange={(e) => setFormData({ ...formData, address_line2: e.target.value })}
-                placeholder="Address Line 2"
-              />
-              <div className="grid grid-cols-3 gap-2">
-                <Input 
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  placeholder="City"
-                />
-                <Input 
-                  value={formData.state}
-                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  placeholder="State"
-                />
-                <Input 
-                  value={formData.pincode}
-                  onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
-                  placeholder="Pincode"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Manager Email (if no manager selected) */}
-        {!selectedManager && (
-          <div>
-            <Label>Manager Email (Manual Entry)</Label>
-            <Input 
-              type="email"
-              value={formData.manager_email}
-              onChange={(e) => setFormData({ ...formData, manager_email: e.target.value })}
-              placeholder="manager@example.com"
-            />
-          </div>
-        )}
-
         {/* Contract Value */}
         <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-md">
           <div className="text-sm text-emerald-600">SDC Contract Value</div>
@@ -2031,8 +1982,20 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
           )}
         </div>
 
-        <Button type="submit" className="w-full" disabled={loading || !formData.district_name || !formData.job_role_id}>
-          {loading ? "Creating..." : "Create SDC"}
+        {/* Validation Message */}
+        {!selectedInfra && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+            <strong>Please select a Center</strong> from Resource Masters to proceed. 
+            If no centers are available, add them in the Resources tab first.
+          </div>
+        )}
+
+        <Button 
+          type="submit" 
+          className="w-full" 
+          disabled={loading || !selectedInfra || !formData.job_role_id}
+        >
+          {loading ? "Creating SDC..." : "Create SDC"}
         </Button>
       </form>
     </>
