@@ -21,12 +21,15 @@ import {
   Briefcase,
   GraduationCap,
   CheckCircle2,
+  CheckCircle,
   Clock,
-  Plus
+  Plus,
+  Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -46,7 +49,33 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-// Stage icons mapping
+// Process Stage icons (5-stage pipeline)
+const PROCESS_ICONS = {
+  mobilization: Users,
+  training: GraduationCap,
+  ojt: Briefcase,
+  assessment: CheckCircle2,
+  placement: Building2
+};
+
+// Process Stage colors
+const PROCESS_COLORS = {
+  mobilization: "bg-amber-500",
+  training: "bg-blue-500",
+  ojt: "bg-indigo-500",
+  assessment: "bg-purple-500",
+  placement: "bg-emerald-500"
+};
+
+// Deliverable items
+const DELIVERABLES = [
+  { id: "dress_distribution", name: "Dress Distribution", icon: ClipboardList },
+  { id: "study_material", name: "Study Material", icon: FileText },
+  { id: "id_card", name: "ID Card", icon: Package },
+  { id: "toolkit", name: "Tool Kit", icon: Briefcase }
+];
+
+// Legacy Stage icons mapping (for backward compatibility)
 const STAGE_ICONS = {
   mobilization: Users,
   dress_distribution: ClipboardList,
@@ -126,6 +155,20 @@ export default function Dashboard({ user }) {
   }
 
   const { commercial_health, stage_progress, sdc_summaries } = dashboardData || {};
+
+  // Calculate aggregated process data from stage_progress
+  const processStages = [
+    { id: "mobilization", name: "Mobilization", data: stage_progress?.mobilization },
+    { id: "training", name: "Training", data: stage_progress?.classroom_training },
+    { id: "ojt", name: "OJT", data: stage_progress?.ojt },
+    { id: "assessment", name: "Assessment", data: stage_progress?.assessment },
+    { id: "placement", name: "Placement", data: stage_progress?.placement }
+  ];
+
+  // Calculate overall progress
+  const totalTarget = processStages.reduce((sum, s) => sum + (s.data?.target || 0), 0);
+  const totalCompleted = processStages.reduce((sum, s) => sum + (s.data?.completed || 0), 0);
+  const overallProgress = totalTarget > 0 ? Math.round((totalCompleted / totalTarget) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-background" data-testid="dashboard">
@@ -236,7 +279,7 @@ export default function Dashboard({ user }) {
         )}
 
         {/* Commercial Health Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <MetricCard
             title="Total Portfolio"
             value={formatCurrency(commercial_health?.total_portfolio || 0)}
@@ -280,38 +323,192 @@ export default function Dashboard({ user }) {
           />
         </div>
 
-        {/* Training Roadmap Progress */}
-        <Card className="mb-8 border border-border animate-fade-in" data-testid="roadmap-progress">
-          <CardHeader className="pb-2">
-            <CardTitle className="font-heading font-bold text-lg">Training Roadmap Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-              {stage_progress && Object.entries(stage_progress).map(([stageId, stage]) => {
-                const Icon = STAGE_ICONS[stageId] || Clock;
-                const color = STAGE_COLORS[stageId] || "bg-slate-500";
-                const percent = stage.target > 0 ? Math.round((stage.completed / stage.target) * 100) : 0;
-                
-                return (
-                  <div key={stageId} className="text-center p-4 border border-border rounded-md">
-                    <div className={`w-10 h-10 mx-auto mb-2 rounded-full ${color} flex items-center justify-center`}>
-                      <Icon className="w-5 h-5 text-white" />
+        {/* Process Stages & Deliverables - Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Process Stages - 2/3 width */}
+          <Card className="border border-border animate-fade-in lg:col-span-2" data-testid="process-stages-card">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-heading text-base flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5" />
+                  Process Stages (All SDCs)
+                </CardTitle>
+                <Badge className="text-lg px-3 py-1 bg-indigo-100 text-indigo-700">
+                  {overallProgress}%
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Overall Progress Bar */}
+              <Progress value={overallProgress} className="h-3 mb-6" />
+              
+              {/* Process Flow Timeline */}
+              <div className="flex items-center justify-between mb-4">
+                {processStages.map((stage, idx) => {
+                  const completed = stage.data?.completed || 0;
+                  const target = stage.data?.target || 0;
+                  const percent = target > 0 ? Math.round((completed / target) * 100) : 0;
+                  const isComplete = percent >= 100;
+                  const isInProgress = percent > 0 && percent < 100;
+                  
+                  return (
+                    <div key={stage.id} className="flex items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                        isComplete ? "bg-emerald-500 text-white" :
+                        isInProgress ? "bg-blue-500 text-white" :
+                        "bg-gray-200 text-gray-500"
+                      }`}>
+                        {isComplete ? "✓" : idx + 1}
+                      </div>
+                      {idx < 4 && (
+                        <div className={`w-8 lg:w-16 h-1 ${
+                          isComplete ? "bg-emerald-500" : "bg-gray-200"
+                        }`} />
+                      )}
                     </div>
-                    <div className="font-mono font-bold text-lg">{stage.completed}</div>
-                    <div className="text-xs text-muted-foreground">{stage.name}</div>
-                    <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full ${color} transition-all duration-500`}
-                        style={{ width: `${percent}%` }}
-                      />
+                  );
+                })}
+              </div>
+              <div className="flex justify-between mb-6 text-xs text-muted-foreground">
+                {processStages.map(stage => (
+                  <span key={stage.id}>{stage.name}</span>
+                ))}
+              </div>
+
+              {/* Stage Details */}
+              <div className="space-y-3">
+                {processStages.map((stage, index) => {
+                  const StageIcon = PROCESS_ICONS[stage.id] || Users;
+                  const color = PROCESS_COLORS[stage.id] || "bg-gray-500";
+                  const completed = stage.data?.completed || 0;
+                  const target = stage.data?.target || 0;
+                  const percent = target > 0 ? Math.round((completed / target) * 100) : 0;
+                  const isComplete = percent >= 100;
+                  const isInProgress = percent > 0 && percent < 100;
+                  
+                  return (
+                    <div 
+                      key={stage.id}
+                      className={`p-3 rounded-lg border transition-all ${
+                        isComplete 
+                          ? "border-emerald-300 bg-emerald-50" 
+                          : isInProgress
+                          ? "border-blue-300 bg-blue-50"
+                          : "border-border bg-background"
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        {/* Stage Number & Icon */}
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          isComplete 
+                            ? "bg-emerald-500 text-white" 
+                            : isInProgress
+                            ? "bg-blue-500 text-white"
+                            : `${color} text-white`
+                        }`}>
+                          {isComplete ? (
+                            <CheckCircle className="w-5 h-5" />
+                          ) : (
+                            <StageIcon className="w-5 h-5" />
+                          )}
+                        </div>
+
+                        {/* Stage Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold">{stage.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              (Target: {target})
+                            </span>
+                          </div>
+                          {/* Progress Bar */}
+                          <div className="flex items-center gap-2">
+                            <Progress 
+                              value={percent} 
+                              className={`h-2 flex-1 ${isComplete ? "[&>div]:bg-emerald-500" : ""}`}
+                            />
+                            <span className="font-mono text-sm w-20 text-right">
+                              {completed}/{target}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Percentage */}
+                        <div className="text-right">
+                          <span className={`font-mono font-bold text-lg ${
+                            isComplete ? "text-emerald-600" : 
+                            isInProgress ? "text-blue-600" : "text-gray-500"
+                          }`}>
+                            {percent}%
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">{percent}%</div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Deliverables - 1/3 width */}
+          <Card className="border border-border animate-fade-in" data-testid="deliverables-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-heading text-base flex items-center gap-2">
+                <Package className="w-5 h-5" />
+                Deliverables Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {/* Dress Distribution */}
+                <DeliverableItem 
+                  name="Dress Distribution"
+                  icon={ClipboardList}
+                  data={stage_progress?.dress_distribution}
+                />
+                {/* Study Material */}
+                <DeliverableItem 
+                  name="Study Material"
+                  icon={FileText}
+                  data={stage_progress?.study_material}
+                />
+                {/* ID Card - estimated from mobilization */}
+                <DeliverableItem 
+                  name="ID Card"
+                  icon={Users}
+                  data={stage_progress?.mobilization}
+                  label="Based on Mobilization"
+                />
+                {/* Tool Kit - estimated from training */}
+                <DeliverableItem 
+                  name="Tool Kit"
+                  icon={Briefcase}
+                  data={stage_progress?.classroom_training}
+                  label="Based on Training"
+                />
+              </div>
+
+              {/* Quick Stats */}
+              <div className="mt-6 pt-4 border-t border-border">
+                <h4 className="text-sm font-semibold mb-3">Quick Stats</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-muted/50 text-center">
+                    <div className="font-mono font-bold text-xl text-amber-600">
+                      {stage_progress?.mobilization?.completed || 0}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Mobilized</div>
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                  <div className="p-3 rounded-lg bg-muted/50 text-center">
+                    <div className="font-mono font-bold text-xl text-emerald-600">
+                      {stage_progress?.placement?.completed || 0}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Placed</div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* SDC Cards */}
         <div className="mb-4 flex items-center justify-between">
@@ -370,6 +567,44 @@ export default function Dashboard({ user }) {
   );
 }
 
+// Deliverable Item Component
+const DeliverableItem = ({ name, icon: Icon, data, label }) => {
+  const completed = data?.completed || 0;
+  const target = data?.target || 0;
+  const percent = target > 0 ? Math.round((completed / target) * 100) : 0;
+  const isComplete = percent >= 100;
+  
+  return (
+    <div 
+      className={`p-3 rounded-lg border flex items-center justify-between ${
+        isComplete 
+          ? "border-emerald-300 bg-emerald-50" 
+          : percent > 0
+          ? "border-blue-200 bg-blue-50/50"
+          : "border-border bg-background"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+          isComplete ? "bg-emerald-500 text-white" : "bg-gray-200 text-gray-600"
+        }`}>
+          {isComplete ? <CheckCircle className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+        </div>
+        <div>
+          <div className="font-medium text-sm">{name}</div>
+          {label && <div className="text-xs text-muted-foreground">{label}</div>}
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="font-mono text-sm font-semibold">{completed}/{target}</div>
+        <div className={`text-xs ${isComplete ? "text-emerald-600" : "text-muted-foreground"}`}>
+          {percent}%
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Helper Components
 const MetricCard = ({ title, value, subtitle, icon, trend, color, className, testId }) => (
   <Card className={`border border-border ${className}`} data-testid={testId}>
@@ -411,6 +646,15 @@ const SDCCard = ({ sdc, onClick, className }) => {
   const hasBlockers = sdc.blockers && sdc.blockers.length > 0;
   const isOverdue = sdc.overdue_count > 0;
 
+  // Calculate 5-stage progress
+  const processProgress = {
+    mobilization: sdc.progress?.mobilization,
+    training: sdc.progress?.classroom_training,
+    ojt: sdc.progress?.ojt,
+    assessment: sdc.progress?.assessment,
+    placement: sdc.progress?.placement
+  };
+
   return (
     <Card 
       className={`border border-border cursor-pointer hover:bg-muted/30 transition-colors ${className}`}
@@ -441,20 +685,35 @@ const SDCCard = ({ sdc, onClick, className }) => {
           </div>
         )}
 
-        {/* Mini Progress - Training Stages */}
-        <div className="flex h-2 rounded-full overflow-hidden bg-muted mb-4">
-          {sdc.progress && Object.entries(sdc.progress).map(([stageId, data], i) => {
-            const color = STAGE_COLORS[stageId] || "bg-slate-400";
-            const width = data.target > 0 ? (data.completed / data.target) * (100 / 7) : 0;
+        {/* Mini 5-Stage Process Flow */}
+        <div className="flex items-center justify-between mb-2">
+          {Object.entries(processProgress).map(([stageId, data], i) => {
+            const percent = data?.target > 0 ? (data?.completed / data?.target) * 100 : 0;
+            const isComplete = percent >= 100;
+            const isInProgress = percent > 0 && percent < 100;
+            
             return (
-              <div 
-                key={stageId}
-                className={color}
-                style={{ width: `${width}%` }}
-                title={`${stageId}: ${data.completed}/${data.target}`}
-              />
+              <div key={stageId} className="flex items-center">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                  isComplete ? "bg-emerald-500 text-white" :
+                  isInProgress ? "bg-blue-500 text-white" :
+                  "bg-gray-200 text-gray-500"
+                }`}>
+                  {isComplete ? "✓" : i + 1}
+                </div>
+                {i < 4 && (
+                  <div className={`w-3 h-0.5 ${isComplete ? "bg-emerald-500" : "bg-gray-200"}`} />
+                )}
+              </div>
             );
           })}
+        </div>
+        <div className="flex justify-between text-[10px] text-muted-foreground mb-4">
+          <span>Mob</span>
+          <span>Train</span>
+          <span>OJT</span>
+          <span>Assess</span>
+          <span>Place</span>
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-center mb-4">
@@ -503,12 +762,15 @@ const DashboardSkeleton = () => (
     </header>
     <main className="max-w-7xl mx-auto px-6 py-8">
       <Skeleton className="w-64 h-8 mb-8" />
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         {[1, 2, 3, 4, 5].map(i => (
           <Skeleton key={i} className="h-28 rounded-md" />
         ))}
       </div>
-      <Skeleton className="h-48 rounded-md mb-8" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <Skeleton className="h-96 rounded-md lg:col-span-2" />
+        <Skeleton className="h-96 rounded-md" />
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[1, 2, 3].map(i => (
           <Skeleton key={i} className="h-64 rounded-md" />
@@ -607,7 +869,7 @@ const NewWorkOrderForm = ({ onSuccess }) => {
             <Input 
               value={formData.job_role_name}
               onChange={(e) => setFormData({ ...formData, job_role_name: e.target.value })}
-              placeholder="Field Technician Computing"
+              placeholder="e.g., Field Technician Computing"
               required
               data-testid="input-job-name"
             />
@@ -620,7 +882,7 @@ const NewWorkOrderForm = ({ onSuccess }) => {
             <Input 
               value={formData.awarding_body}
               onChange={(e) => setFormData({ ...formData, awarding_body: e.target.value })}
-              placeholder="NSDC PMKVY"
+              placeholder="e.g., NSDC, Sector Skill Council"
               required
               data-testid="input-awarding-body"
             />
@@ -630,39 +892,36 @@ const NewWorkOrderForm = ({ onSuccess }) => {
             <Input 
               value={formData.scheme_name}
               onChange={(e) => setFormData({ ...formData, scheme_name: e.target.value })}
-              placeholder="PMKVY 4.0"
+              placeholder="e.g., PMKVY, DDUGKY"
               required
               data-testid="input-scheme"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
-            <Label>Total Training Hours *</Label>
+            <Label>Training Hours *</Label>
             <Input 
               type="number"
               value={formData.total_training_hours}
               onChange={(e) => setFormData({ ...formData, total_training_hours: e.target.value })}
               min="1"
               required
-              data-testid="input-training-hours"
+              data-testid="input-hours"
             />
           </div>
           <div>
-            <Label>Sessions/Day (hrs)</Label>
+            <Label>Sessions/Day</Label>
             <Input 
               type="number"
               value={formData.sessions_per_day}
               onChange={(e) => setFormData({ ...formData, sessions_per_day: e.target.value })}
               min="1"
               max="12"
-              data-testid="input-sessions-day"
+              data-testid="input-sessions"
             />
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>Number of Students *</Label>
             <Input 
@@ -674,6 +933,9 @@ const NewWorkOrderForm = ({ onSuccess }) => {
               data-testid="input-students"
             />
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>Cost per Student (₹) *</Label>
             <Input 
@@ -685,32 +947,40 @@ const NewWorkOrderForm = ({ onSuccess }) => {
               data-testid="input-cost"
             />
           </div>
-        </div>
-
-        <div>
-          <Label>Local Manager Email (Optional)</Label>
-          <Input 
-            type="email"
-            value={formData.manager_email}
-            onChange={(e) => setFormData({ ...formData, manager_email: e.target.value })}
-            placeholder="manager@example.com"
-            data-testid="input-manager-email"
-          />
-        </div>
-
-        <div className="p-4 bg-muted rounded-md">
-          <div className="text-sm text-muted-foreground">Total Contract Value</div>
-          <div className="font-mono font-bold text-2xl text-primary">
-            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(totalValue)}
+          <div>
+            <Label>Manager Email</Label>
+            <Input 
+              type="email"
+              value={formData.manager_email}
+              onChange={(e) => setFormData({ ...formData, manager_email: e.target.value })}
+              placeholder="manager@example.com"
+              data-testid="input-manager-email"
+            />
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {formData.num_students} students × ₹{Number(formData.cost_per_student).toLocaleString('en-IN')} per student
-          </p>
         </div>
 
-        <Button type="submit" className="w-full" disabled={loading} data-testid="submit-work-order">
-          {loading ? "Creating..." : "Create Work Order & SDC"}
-        </Button>
+        {/* Total Contract Value */}
+        <div className="p-4 bg-muted rounded-lg">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Total Contract Value:</span>
+            <span className="font-mono font-bold text-xl">
+              {new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                maximumFractionDigits: 0
+              }).format(totalValue)}
+            </span>
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {formData.num_students} students × ₹{formData.cost_per_student}/student
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-4">
+          <Button type="submit" disabled={loading} data-testid="submit-work-order">
+            {loading ? "Creating..." : "Create Work Order"}
+          </Button>
+        </div>
       </form>
     </>
   );
