@@ -17,6 +17,12 @@ from models.schemas import (
 from services.auth import get_current_user, require_ho_role
 from services.soft_delete import soft_delete_document
 from services.utils import create_training_roadmap
+from services.ledger import (
+    validate_allocation,
+    record_allocation,
+    check_resource_availability,
+    lock_resource
+)
 from config import CATEGORY_RATES
 
 router = APIRouter(prefix="/master", tags=["Master Data"])
