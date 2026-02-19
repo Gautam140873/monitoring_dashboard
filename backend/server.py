@@ -466,6 +466,7 @@ api_router.include_router(master_data_router)
 api_router.include_router(resources_router)
 api_router.include_router(sdcs_router)
 api_router.include_router(dashboard_router)
+api_router.include_router(ledger_router)
 
 # Include main API router in app
 app.include_router(api_router)
