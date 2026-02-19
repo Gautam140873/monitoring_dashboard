@@ -187,7 +187,7 @@ async def create_holiday(holiday_data: HolidayCreate, user: User = Depends(get_c
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
-    await db.holidays.insert_one(holiday)
+    await db.holidays.insert_one(holiday.copy())
     return holiday
 
 
