@@ -221,6 +221,11 @@ const AppRouter = () => {
           {({ user, setUser }) => <MasterData user={user} setUser={setUser} />}
         </ProtectedRoute>
       } />
+      <Route path="/resource-calendar" element={
+        <ProtectedRoute>
+          {({ user, setUser }) => <ResourceCalendar user={user} setUser={setUser} />}
+        </ProtectedRoute>
+      } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
