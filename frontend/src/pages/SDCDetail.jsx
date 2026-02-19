@@ -276,6 +276,79 @@ export default function SDCDetail({ user }) {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* SDC Info & Overall Progress */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* SDC Summary Card */}
+          <Card className="border border-border animate-fade-in">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-heading text-base">SDC Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Target Students</span>
+                <span className="font-mono font-bold">{processStatus?.target_students || sdcData.target_students || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Work Orders</span>
+                <span className="font-mono font-bold">{work_orders?.length || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Location</span>
+                <span className="font-medium">{sdcData.location}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Status</span>
+                <Badge variant="default">{sdcData.status || "Active"}</Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Overall Progress Card */}
+          <Card className="border border-border animate-fade-in lg:col-span-2">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-heading text-base">Overall Progress</CardTitle>
+                <Badge className="text-lg px-3 py-1 bg-indigo-100 text-indigo-700">
+                  {processStatus?.overall_progress || 0}%
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Progress value={processStatus?.overall_progress || 0} className="h-4 mb-4" />
+              {/* Mini Process Flow Timeline */}
+              <div className="flex items-center justify-between">
+                {processStatus?.stages?.map((stage, idx) => {
+                  const isCompleted = stage.status === "completed";
+                  const isInProgress = stage.status === "in_progress";
+                  return (
+                    <div key={stage.stage_id} className="flex items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                        isCompleted ? "bg-emerald-500 text-white" :
+                        isInProgress ? "bg-blue-500 text-white" :
+                        "bg-gray-200 text-gray-500"
+                      }`}>
+                        {isCompleted ? "✓" : idx + 1}
+                      </div>
+                      {idx < 4 && (
+                        <div className={`w-8 lg:w-16 h-1 ${
+                          isCompleted ? "bg-emerald-500" : "bg-gray-200"
+                        }`} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+                <span>Mobilization</span>
+                <span>Training</span>
+                <span>OJT</span>
+                <span>Assessment</span>
+                <span>Placement</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Financial Summary */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <Card className="border border-border animate-fade-in stagger-1">
@@ -314,60 +387,157 @@ export default function SDCDetail({ user }) {
           </Card>
         </div>
 
-        {/* Training Roadmap Progress */}
-        <Card className="mb-8 border border-border animate-fade-in" data-testid="roadmap-card">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="font-heading font-bold">Training Roadmap</CardTitle>
-            {work_orders && work_orders.length > 0 && (
-              <Dialog open={showProgressDialog} onOpenChange={setShowProgressDialog}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" data-testid="update-progress-btn">
+        {/* Process Stages & Deliverables - Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Process Stages - 2/3 width */}
+          <Card className="border border-border animate-fade-in lg:col-span-2">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-heading text-base flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5" />
+                  Process Stages
+                </CardTitle>
+                {user?.role === "ho" && (
+                  <Button variant="outline" size="sm" onClick={() => setShowStageUpdateDialog(true)}>
                     <Edit2 className="w-4 h-4 mr-1" />
-                    Update Progress
+                    Update
                   </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                  <BatchProgressForm 
-                    sdcId={sdcId}
-                    workOrders={work_orders}
-                    onSuccess={() => {
-                      setShowProgressDialog(false);
-                      fetchSDCData();
-                    }} 
-                  />
-                </DialogContent>
-              </Dialog>
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-              {stage_progress && Object.entries(stage_progress).sort((a, b) => a[1].order - b[1].order).map(([stageId, stage]) => {
-                const Icon = STAGE_ICONS[stageId] || Clock;
-                const color = STAGE_COLORS[stageId] || "bg-slate-500";
-                const percent = stage.target > 0 ? Math.round((stage.completed / stage.target) * 100) : 0;
-                
-                return (
-                  <div key={stageId} className="text-center p-3 border border-border rounded-md hover:bg-muted/30 transition-colors">
-                    <div className={`w-8 h-8 mx-auto mb-2 rounded-full ${color} flex items-center justify-center`}>
-                      <Icon className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="font-mono font-bold">{stage.completed}/{stage.target}</div>
-                    <div className="text-xs text-muted-foreground truncate">{stage.name}</div>
-                    <div className="mt-2 h-1 bg-muted rounded-full overflow-hidden">
-                      <div className={`h-full ${color}`} style={{ width: `${percent}%` }} />
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">{percent}%</div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {processStatus?.stages?.map((stage, index) => {
+                  const StageIcon = PROCESS_ICONS[stage.stage_id] || Users;
+                  const isLocked = !stage.can_start && stage.status === "pending";
+                  
+                  return (
+                    <div 
+                      key={stage.stage_id}
+                      className={`p-3 rounded-lg border transition-all ${
+                        stage.status === "completed" 
+                          ? "border-emerald-300 bg-emerald-50" 
+                          : stage.status === "in_progress"
+                          ? "border-blue-300 bg-blue-50"
+                          : isLocked
+                          ? "border-gray-200 bg-gray-50 opacity-60"
+                          : "border-border bg-background"
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        {/* Stage Number & Icon */}
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          stage.status === "completed" 
+                            ? "bg-emerald-500 text-white" 
+                            : stage.status === "in_progress"
+                            ? "bg-blue-500 text-white"
+                            : "bg-gray-200 text-gray-500"
+                        }`}>
+                          {stage.status === "completed" ? (
+                            <CheckCircle className="w-5 h-5" />
+                          ) : (
+                            <span className="font-bold">{index + 1}</span>
+                          )}
+                        </div>
 
-        {/* Tabs */}
+                        {/* Stage Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold">{stage.name}</span>
+                            {isLocked && <span className="text-xs text-gray-500">🔒</span>}
+                          </div>
+                          {/* Progress Bar */}
+                          <div className="flex items-center gap-2">
+                            <Progress 
+                              value={stage.progress_percent} 
+                              className={`h-2 flex-1 ${stage.status === "completed" ? "[&>div]:bg-emerald-500" : ""}`}
+                            />
+                            <span className="font-mono text-sm w-20 text-right">
+                              {stage.completed}/{stage.target}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Dates */}
+                        <div className="text-right text-xs text-muted-foreground hidden md:block">
+                          {stage.start_date && (
+                            <div>Start: {new Date(stage.start_date).toLocaleDateString()}</div>
+                          )}
+                          {stage.end_date && (
+                            <div>End: {new Date(stage.end_date).toLocaleDateString()}</div>
+                          )}
+                          {!stage.start_date && !stage.end_date && (
+                            <div className="text-gray-400">No dates set</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Deliverables - 1/3 width */}
+          <Card className="border border-border animate-fade-in">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-heading text-base flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Deliverables
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {processStatus?.deliverables?.map((deliv) => (
+                  <div 
+                    key={deliv.deliverable_id}
+                    className={`p-3 rounded-lg border flex items-center justify-between ${
+                      deliv.status === "completed" 
+                        ? "border-emerald-300 bg-emerald-50" 
+                        : deliv.status === "not_required"
+                        ? "border-gray-200 bg-gray-100"
+                        : "border-border"
+                    }`}
+                  >
+                    <span className="font-medium text-sm">{deliv.name}</span>
+                    {user?.role === "ho" ? (
+                      <Select 
+                        value={deliv.status} 
+                        onValueChange={(v) => handleUpdateDeliverable(deliv.deliverable_id, v)}
+                      >
+                        <SelectTrigger className="w-28 h-7 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">⏳ Pending</SelectItem>
+                          <SelectItem value="completed">✅ Done</SelectItem>
+                          <SelectItem value="not_required">➖ N/A</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Badge variant="outline" className={`text-xs ${
+                        deliv.status === "completed" ? "bg-emerald-100 text-emerald-700 border-emerald-300" :
+                        deliv.status === "not_required" ? "bg-gray-100 text-gray-500" : ""
+                      }`}>
+                        {deliv.status === "completed" ? "✅ Done" :
+                         deliv.status === "not_required" ? "➖ N/A" : "⏳ Pending"}
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabs - Work Orders & Billing */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="animate-fade-in">
           <TabsList className="mb-6">
-            <TabsTrigger value="process" data-testid="tab-process">Process Flow</TabsTrigger>
+            <TabsTrigger value="work-orders" data-testid="tab-work-orders">Work Orders</TabsTrigger>
+            <TabsTrigger value="billing" data-testid="tab-billing">Billing</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="work-orders">
             <TabsTrigger value="roadmap" data-testid="tab-roadmap">Work Orders</TabsTrigger>
             <TabsTrigger value="billing" data-testid="tab-billing">Billing</TabsTrigger>
           </TabsList>
