@@ -699,6 +699,83 @@ export default function SDCDetail({ user }) {
             />
           </DialogContent>
         </Dialog>
+
+        {/* Stage Update Dialog */}
+        <Dialog open={showStageUpdateDialog} onOpenChange={setShowStageUpdateDialog}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Update Process Stages</DialogTitle>
+              <DialogDescription>Update progress and dates for each stage</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              {processStatus?.stages?.map((stage, idx) => {
+                const isLocked = !stage.can_start && stage.status === "pending";
+                return (
+                  <div 
+                    key={stage.stage_id}
+                    className={`p-4 rounded-lg border ${isLocked ? "opacity-50 bg-gray-50" : "bg-background"}`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="font-semibold">{idx + 1}. {stage.name}</div>
+                      {isLocked && <Badge variant="outline" className="text-xs">🔒 Locked</Badge>}
+                    </div>
+                    {!isLocked && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                          <Label className="text-xs">Completed</Label>
+                          <Input 
+                            type="number"
+                            className="h-8"
+                            defaultValue={stage.completed}
+                            max={stage.target}
+                            min={0}
+                            onBlur={(e) => {
+                              const val = parseInt(e.target.value);
+                              if (!isNaN(val) && val !== stage.completed) {
+                                handleUpdateStage(stage.stage_id, { completed: val });
+                              }
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Target</Label>
+                          <Input type="number" className="h-8" value={stage.target} disabled />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Start Date</Label>
+                          <Input 
+                            type="date"
+                            className="h-8"
+                            defaultValue={stage.start_date?.split('T')[0] || ""}
+                            onChange={(e) => {
+                              handleUpdateStage(stage.stage_id, { start_date: e.target.value });
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">End Date</Label>
+                          <Input 
+                            type="date"
+                            className="h-8"
+                            defaultValue={stage.end_date?.split('T')[0] || ""}
+                            onChange={(e) => {
+                              handleUpdateStage(stage.stage_id, { end_date: e.target.value });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="flex justify-end pt-4">
+                <Button onClick={() => setShowStageUpdateDialog(false)}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
