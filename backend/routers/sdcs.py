@@ -219,9 +219,17 @@ async def update_process_stage(
     start_date: str = None,
     end_date: str = None,
     notes: str = None,
-    user: User = Depends(require_ho_role)
+    user: User = Depends(get_current_user)
 ):
-    """Update a process stage for an SDC"""
+    """Update a process stage for an SDC (Refined RBAC: Managers can only update their assigned SDC)"""
+    # Check access with refined RBAC
+    has_access = await check_sdc_access(user, sdc_id, "update")
+    if not has_access:
+        raise HTTPException(
+            status_code=403, 
+            detail="You don't have permission to update this SDC. Only assigned managers or HO can modify."
+        )
+    
     valid_stages = [s["stage_id"] for s in PROCESS_STAGES]
     if stage_id not in valid_stages:
         raise HTTPException(status_code=400, detail=f"Invalid stage_id. Must be one of: {valid_stages}")
