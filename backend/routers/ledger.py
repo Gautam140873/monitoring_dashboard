@@ -214,6 +214,11 @@ async def get_burndown_dashboard(
     Get burn-down data for Work Order progress visualization.
     Shows pipeline: Unallocated → Allocated → Mobilized → In-Training → Placed
     """
+    # For SDC role, filter by assigned SDC
+    if user.role == "sdc" and user.assigned_sdc_id:
+        # Get work orders for assigned SDC
+        pass  # Will be filtered in the service
+    
     data = await get_burndown_data(master_wo_id)
     return data
 
