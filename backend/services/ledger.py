@@ -27,12 +27,6 @@ async def get_target_ledger(master_wo_id: str) -> Dict:
     if not master_wo:
         return None
     
-    # Get all SDC allocations for this work order
-    allocations = await db.target_ledger.find(
-        {"master_wo_id": master_wo_id, "is_deleted": {"$ne": True}},
-        {"_id": 0}
-    ).to_list(1000)
-    
     # Get all work orders linked to this master WO
     work_orders = await db.work_orders.find(
         {"master_wo_id": master_wo_id, "is_deleted": {"$ne": True}},
