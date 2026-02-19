@@ -1962,39 +1962,141 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
           )}
         </div>
 
-        {/* Job Role Selection */}
-        <div>
-          <Label>Job Role *</Label>
-          <Select value={formData.job_role_id} onValueChange={(v) => setFormData({ ...formData, job_role_id: v })}>
+        {/* Allocation Summary */}
+        {allocationStatus && (
+          <div className="border border-indigo-200 rounded-lg p-4 bg-indigo-50">
+            <div className="flex items-center justify-between mb-3">
+              <Label className="text-base font-semibold flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-indigo-600" />
+                Allocation Status
+              </Label>
+              <Badge variant={allocationStatus.is_fully_allocated ? "default" : "outline"} 
+                className={allocationStatus.is_fully_allocated ? "bg-emerald-100 text-emerald-700" : ""}>
+                {allocationStatus.sdcs_created}/{masterWO.num_sdcs || 0} SDCs Created
+              </Badge>
+            </div>
+            <div className="grid grid-cols-3 gap-4 text-center text-sm">
+              <div>
+                <div className="font-bold text-lg text-indigo-700">{allocationStatus.total_training_target}</div>
+                <div className="text-muted-foreground">Total Target</div>
+              </div>
+              <div>
+                <div className="font-bold text-lg text-amber-600">{allocationStatus.total_allocated}</div>
+                <div className="text-muted-foreground">Allocated</div>
+              </div>
+              <div>
+                <div className="font-bold text-lg text-emerald-600">{allocationStatus.total_remaining}</div>
+                <div className="text-muted-foreground">Remaining</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Job Role Selection with Allocation Info */}
+        <div className="border border-border rounded-lg p-4">
+          <Label className="text-base font-semibold mb-3 block">Step 3: Select Job Role & Allocation *</Label>
+          <Select value={formData.job_role_id} onValueChange={handleJobRoleChange}>
             <SelectTrigger>
               <SelectValue placeholder="Select job role..." />
             </SelectTrigger>
             <SelectContent>
-              {masterWO.job_roles?.map((jr) => (
+              {allocationStatus?.job_roles?.map((jr) => (
+                <SelectItem 
+                  key={jr.job_role_id} 
+                  value={jr.job_role_id}
+                  disabled={jr.remaining === 0}
+                >
+                  <div className="flex flex-col py-1">
+                    <span className="font-medium">{jr.job_role_code} - {jr.job_role_name}</span>
+                    <span className={`text-xs ${jr.remaining === 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                      Target: {jr.target} | Allocated: {jr.allocated} | 
+                      <span className={jr.remaining > 0 ? 'text-emerald-600 font-medium' : 'text-red-500'}>
+                        {' '}Remaining: {jr.remaining}
+                      </span>
+                    </span>
+                  </div>
+                </SelectItem>
+              )) || masterWO.job_roles?.map((jr) => (
                 <SelectItem key={jr.job_role_id} value={jr.job_role_id}>
                   {jr.job_role_code} - {jr.job_role_name} (Target: {jr.target})
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          
+          {/* Selected Job Role Allocation Details */}
+          {selectedJobRoleAllocation && (
+            <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-md">
+              <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                <div>
+                  <div className="font-semibold">{selectedJobRoleAllocation.target}</div>
+                  <div className="text-xs text-muted-foreground">Total</div>
+                </div>
+                <div>
+                  <div className="font-semibold text-amber-600">{selectedJobRoleAllocation.allocated}</div>
+                  <div className="text-xs text-muted-foreground">Allocated</div>
+                </div>
+                <div>
+                  <div className="font-semibold text-emerald-600">{selectedJobRoleAllocation.remaining}</div>
+                  <div className="text-xs text-muted-foreground">Remaining</div>
+                </div>
+                <div>
+                  <div className="font-semibold text-indigo-600">{suggestedTargetPerSDC}</div>
+                  <div className="text-xs text-muted-foreground">Suggested/SDC</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Target & Hours */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label>Target Students *</Label>
+            <Label>Target Students for this SDC *</Label>
             <Input 
               type="number"
               value={formData.target_students}
               onChange={(e) => setFormData({ ...formData, target_students: parseInt(e.target.value) || 0 })}
               min="1"
-              max={selectedInfra?.total_capacity || 999}
+              max={selectedJobRoleAllocation?.remaining || selectedInfra?.total_capacity || 999}
               required
+              className={!isTargetValid ? "border-red-500" : ""}
             />
-            {selectedInfra && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Max capacity: {selectedInfra.total_capacity}
-              </p>
+            <div className="flex justify-between mt-1">
+              {selectedInfra && (
+                <p className="text-xs text-muted-foreground">
+                  Center capacity: {selectedInfra.total_capacity}
+                </p>
+              )}
+              {selectedJobRoleAllocation && (
+                <p className={`text-xs ${isTargetValid ? 'text-emerald-600' : 'text-red-500 font-medium'}`}>
+                  {isTargetValid 
+                    ? `Available: ${selectedJobRoleAllocation.remaining}` 
+                    : `Exceeds available (${selectedJobRoleAllocation.remaining})!`
+                  }
+                </p>
+              )}
+            </div>
+            {/* Quick allocation buttons */}
+            {selectedJobRoleAllocation && selectedJobRoleAllocation.remaining > 0 && (
+              <div className="flex gap-2 mt-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setFormData({ ...formData, target_students: suggestedTargetPerSDC })}
+                >
+                  Suggested ({suggestedTargetPerSDC})
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setFormData({ ...formData, target_students: selectedJobRoleAllocation.remaining })}
+                >
+                  All Remaining ({selectedJobRoleAllocation.remaining})
+                </Button>
+              </div>
             )}
           </div>
           <div>
