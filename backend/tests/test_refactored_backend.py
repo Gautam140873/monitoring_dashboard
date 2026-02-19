@@ -8,7 +8,7 @@ import requests
 import os
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://training-tracker-63.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://crm-dashboard-195.preview.emergentagent.com').rstrip('/')
 
 # Valid session token for HO user
 SESSION_TOKEN = os.environ.get('TEST_SESSION_TOKEN', 'KsyilFW4rNRvJWDJbaQeJhzXqq045BVgbmPEH4ttS7U')

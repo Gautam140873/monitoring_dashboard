@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 
 class SkillFlowAPITester:
-    def __init__(self, base_url="https://training-tracker-63.preview.emergentagent.com"):
+    def __init__(self, base_url="https://crm-dashboard-195.preview.emergentagent.com"):
         self.base_url = base_url
         self.session_token = "test_ho_session_123"  # Provided HO session token
         self.tests_run = 0
