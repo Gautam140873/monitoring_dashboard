@@ -1697,7 +1697,7 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
     ? `SDC_${formData.district_name.toUpperCase().replace(/\s/g, '_')}${formData.sdc_suffix || ''}`
     : '';
 
-  // Handle infrastructure selection
+  // Handle infrastructure selection - auto-fill ALL details
   const handleInfraSelect = (infraId) => {
     const infra = availableInfra.find(i => i.infra_id === infraId);
     if (infra) {
@@ -1705,12 +1705,13 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
       setFormData({
         ...formData,
         infra_id: infraId,
-        address_line1: infra.address_line1,
+        district_name: infra.district,
+        address_line1: infra.address_line1 || "",
         address_line2: infra.address_line2 || "",
-        city: infra.city,
-        state: infra.state,
-        pincode: infra.pincode,
-        target_students: Math.min(formData.target_students, infra.total_capacity)
+        city: infra.city || "",
+        state: infra.state || "",
+        pincode: infra.pincode || "",
+        target_students: Math.min(formData.target_students, infra.total_capacity || 30)
       });
     }
   };
