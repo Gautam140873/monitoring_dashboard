@@ -1,7 +1,7 @@
 """
 Services package for SkillFlow CRM
 """
-from .auth import (
+from services.auth import (
     get_current_user,
     require_ho_role,
     require_admin_role,
@@ -10,9 +10,9 @@ from .auth import (
     has_permission,
     get_role_level,
 )
-from .audit import AuditAction, create_audit_log
-from .soft_delete import soft_delete_document, restore_document, check_duplicate
-from .utils import calculate_end_date, get_or_create_sdc, create_training_roadmap
+from services.audit import AuditAction, create_audit_log
+from services.soft_delete import soft_delete_document, restore_document, check_duplicate
+from services.utils import calculate_end_date, get_or_create_sdc, create_training_roadmap
 
 __all__ = [
     "get_current_user",
