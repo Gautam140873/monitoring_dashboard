@@ -382,6 +382,19 @@ async def batch_update_roadmap(updates: list, user: User = Depends(require_ho_ro
     return {"message": f"Updated {updated_count} roadmap stages"}
 
 
+# ==================== ALERTS ENDPOINT (Backward compatibility) ====================
+
+@api_router.get("/alerts")
+async def get_alerts_legacy(user: User = Depends(get_current_user)):
+    """Get risk alerts (legacy endpoint - redirects to dashboard/alerts)"""
+    query = {"resolved": False}
+    if user.role not in ["ho", "admin"] and user.assigned_sdc_id:
+        query["sdc_id"] = user.assigned_sdc_id
+    
+    alerts = await db.alerts.find(query, {"_id": 0}).to_list(1000)
+    return alerts
+
+
 # ==================== UTILITY ENDPOINTS ====================
 
 @api_router.post("/calculate-end-date")
