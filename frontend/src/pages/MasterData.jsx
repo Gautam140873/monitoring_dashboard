@@ -2127,18 +2127,32 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
           )}
         </div>
 
-        {/* Validation Message */}
+        {/* Validation Messages */}
         {!selectedInfra && (
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
             <strong>Please select a Center</strong> from Resource Masters to proceed. 
             If no centers are available, add them in the Resources tab first.
           </div>
         )}
+        
+        {!isTargetValid && selectedJobRoleAllocation && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+            <strong>Target exceeds available allocation!</strong> 
+            {' '}Maximum available for this job role: {selectedJobRoleAllocation.remaining}
+          </div>
+        )}
+        
+        {selectedJobRoleAllocation?.remaining === 0 && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+            <strong>This job role is fully allocated.</strong> 
+            {' '}Please select a different job role or complete/adjust existing SDCs.
+          </div>
+        )}
 
         <Button 
           type="submit" 
           className="w-full" 
-          disabled={loading || !selectedInfra || !formData.job_role_id}
+          disabled={loading || !selectedInfra || !formData.job_role_id || !isTargetValid || selectedJobRoleAllocation?.remaining === 0}
         >
           {loading ? "Creating SDC..." : "Create SDC"}
         </Button>
