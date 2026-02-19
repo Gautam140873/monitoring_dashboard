@@ -328,9 +328,17 @@ async def update_deliverable_status(
     deliverable_id: str,
     status: str,
     notes: str = None,
-    user: User = Depends(require_ho_role)
+    user: User = Depends(get_current_user)
 ):
-    """Update a deliverable status for an SDC"""
+    """Update a deliverable status for an SDC (Refined RBAC: Managers can only update their assigned SDC)"""
+    # Check access with refined RBAC
+    has_access = await check_sdc_access(user, sdc_id, "update")
+    if not has_access:
+        raise HTTPException(
+            status_code=403, 
+            detail="You don't have permission to update this SDC. Only assigned managers or HO can modify."
+        )
+    
     valid_deliverables = [d["deliverable_id"] for d in DELIVERABLES]
     if deliverable_id not in valid_deliverables:
         raise HTTPException(status_code=400, detail=f"Invalid deliverable_id. Must be one of: {valid_deliverables}")
