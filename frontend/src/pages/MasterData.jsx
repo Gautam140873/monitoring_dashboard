@@ -1777,10 +1777,80 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
       <DialogHeader>
         <DialogTitle>Create SDC for {masterWO.work_order_number}</DialogTitle>
         <DialogDescription>
-          Select from available resources or enter details manually
+          Select a center from Resource Masters - all details will be auto-filled
         </DialogDescription>
       </DialogHeader>
-      <form onSubmit={handleSubmit} className="space-y-4 mt-4" data-testid="sdc-from-master-form">
+      <form onSubmit={handleSubmit} className="space-y-4 mt-4 max-h-[60vh] overflow-y-auto pr-2" data-testid="sdc-from-master-form">
+        
+        {/* STEP 1: Select Center (Primary Selection) */}
+        <div className="border-2 border-primary/30 rounded-lg p-4 bg-primary/5">
+          <Label className="text-base font-semibold flex items-center gap-2 mb-3">
+            <Home className="w-5 h-5 text-primary" />
+            Step 1: Select Center from Resource Masters *
+          </Label>
+          <Badge variant="outline" className="text-xs mb-3">
+            {availableInfra.length} centers available
+          </Badge>
+          
+          <Select value={formData.infra_id} onValueChange={handleInfraSelect}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a center..." />
+            </SelectTrigger>
+            <SelectContent className="max-h-60">
+              {availableInfra.map((infra) => (
+                <SelectItem key={infra.infra_id} value={infra.infra_id}>
+                  <div className="flex flex-col py-1">
+                    <span className="font-medium">{infra.center_name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {infra.district} • {infra.city}, {infra.state} • Capacity: {infra.total_capacity}
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          {availableInfra.length === 0 && (
+            <p className="text-sm text-amber-600 mt-2">
+              No centers available. Please add centers in Resources tab first.
+            </p>
+          )}
+        </div>
+
+        {/* Selected Center Details (Auto-filled) */}
+        {selectedInfra && (
+          <div className="border border-emerald-200 rounded-lg p-4 bg-emerald-50">
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <span className="font-semibold text-emerald-700">Center Selected - Details Auto-filled</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-muted-foreground">Center:</span>
+                <span className="ml-2 font-medium">{selectedInfra.center_name}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">District:</span>
+                <span className="ml-2 font-medium">{selectedInfra.district}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Address:</span>
+                <span className="ml-2">{selectedInfra.address_line1}, {selectedInfra.city}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Capacity:</span>
+                <span className="ml-2 font-medium">{selectedInfra.total_capacity} students</span>
+              </div>
+              <div className="col-span-2 flex gap-2 mt-1">
+                {selectedInfra.has_biometric && <Badge variant="outline" className="text-xs bg-blue-50">Biometric</Badge>}
+                {selectedInfra.has_internet && <Badge variant="outline" className="text-xs bg-green-50">Internet</Badge>}
+                {selectedInfra.has_fire_safety && <Badge variant="outline" className="text-xs bg-red-50">Fire Safety</Badge>}
+                {selectedInfra.has_ac && <Badge variant="outline" className="text-xs">AC</Badge>}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* SDC Name Preview */}
         {sdcNamePreview && (
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
@@ -1789,75 +1859,16 @@ const SDCFromMasterForm = ({ masterWO, onSuccess }) => {
           </div>
         )}
 
-        {/* District & Suffix */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>District *</Label>
-            <Select value={formData.district_name} onValueChange={(v) => {
-              setFormData({ ...formData, district_name: v, infra_id: "" });
-              setSelectedInfra(null);
-            }}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select district..." />
-              </SelectTrigger>
-              <SelectContent>
-                {masterWO.sdc_districts?.map((dist, idx) => (
-                  <SelectItem key={idx} value={dist.district_name}>
-                    {dist.district_name} ({dist.sdc_count} SDC{dist.sdc_count > 1 ? 's' : ''})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>SDC Suffix (for multiple SDCs)</Label>
-            <Input 
-              value={formData.sdc_suffix}
-              onChange={(e) => setFormData({ ...formData, sdc_suffix: e.target.value })}
-              placeholder="e.g., 1, 2, A, B"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Leave empty for single SDC</p>
-          </div>
+        {/* SDC Suffix (for multiple SDCs in same district) */}
+        <div>
+          <Label>SDC Suffix (for multiple SDCs in same district)</Label>
+          <Input 
+            value={formData.sdc_suffix}
+            onChange={(e) => setFormData({ ...formData, sdc_suffix: e.target.value })}
+            placeholder="e.g., 1, 2, A, B"
+          />
+          <p className="text-xs text-muted-foreground mt-1">Leave empty for single SDC in district</p>
         </div>
-
-        {/* Select from Resources */}
-        <div className="border border-border rounded-md p-4 bg-muted/30">
-          <div className="flex items-center justify-between mb-3">
-            <Label className="text-base font-medium flex items-center gap-2">
-              <Home className="w-4 h-4" />
-              Select Center from Resources
-            </Label>
-            <Badge variant="outline" className="text-xs">
-              {filteredInfra.length} available in {formData.district_name || "selected district"}
-            </Badge>
-          </div>
-          
-          {filteredInfra.length > 0 ? (
-            <Select value={formData.infra_id} onValueChange={handleInfraSelect}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select available center..." />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredInfra.map((infra) => (
-                  <SelectItem key={infra.infra_id} value={infra.infra_id}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{infra.center_name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {infra.center_code} • Capacity: {infra.total_capacity} • {infra.city}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <p className="text-sm text-muted-foreground py-2">
-              {formData.district_name 
-                ? `No available centers in ${formData.district_name}. You can add manually below.`
-                : "Select a district first to see available centers."
-              }
-            </p>
-          )}
 
           {selectedInfra && (
             <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-md">
