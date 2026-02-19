@@ -29,6 +29,7 @@ from routers.master_data import router as master_data_router
 from routers.resources import router as resources_router
 from routers.sdcs import router as sdcs_router
 from routers.dashboard import router as dashboard_router
+from routers.ledger import router as ledger_router
 
 # Create the main app
 app = FastAPI(title="SkillFlow CRM API", version="3.0.0")
