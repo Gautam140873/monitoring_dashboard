@@ -275,6 +275,24 @@ async def check_duplicate(
     return {"is_duplicate": False}
 
 # ==================== TRAINING ROADMAP STAGES ====================
+# ==================== PROCESS STAGES (Sequential & Target-bound) ====================
+PROCESS_STAGES = [
+    {"stage_id": "mobilization", "name": "Mobilization", "order": 1, "description": "Student registration and enrollment", "icon": "Users"},
+    {"stage_id": "training", "name": "Training", "order": 2, "description": "Classroom training phase", "icon": "GraduationCap", "depends_on": "mobilization"},
+    {"stage_id": "ojt", "name": "OJT", "order": 3, "description": "On-the-Job Training", "icon": "Briefcase", "depends_on": "training"},
+    {"stage_id": "assessment", "name": "Assessment", "order": 4, "description": "Evaluation and certification", "icon": "ClipboardCheck", "depends_on": "ojt"},
+    {"stage_id": "placement", "name": "Placement", "order": 5, "description": "Job placement", "icon": "Award", "depends_on": "assessment"}
+]
+
+# ==================== DELIVERABLES (Yes/No/Not Required) ====================
+DELIVERABLES = [
+    {"deliverable_id": "dress_distribution", "name": "Dress Distribution", "description": "Uniform/dress code"},
+    {"deliverable_id": "study_material", "name": "Study Material", "description": "Books and learning materials"},
+    {"deliverable_id": "id_card", "name": "ID Card", "description": "Student ID cards"},
+    {"deliverable_id": "toolkit", "name": "Tool Kit", "description": "Trade-specific tools"}
+]
+
+# Keep old TRAINING_STAGES for backward compatibility
 TRAINING_STAGES = [
     {"stage_id": "mobilization", "name": "Mobilization", "order": 1, "description": "Finding students"},
     {"stage_id": "dress_distribution", "name": "Dress Distribution", "order": 2, "description": "Uniform distribution"},
