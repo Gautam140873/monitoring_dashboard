@@ -203,6 +203,129 @@ async def get_resource_lock_summary(user: User = Depends(require_ho_role)):
     }
 
 
+# ==================== RESOURCE CALENDAR ENDPOINTS ====================
+
+@router.get("/resource/calendar")
+async def get_resource_calendar(
+    resource_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    user: User = Depends(require_ho_role)
+):
+    """
+    Get resource calendar view showing availability and bookings.
+    Returns all resources with their current assignments and booking history.
+    """
+    from datetime import datetime, timedelta
+    
+    # Default to current month if no dates provided
+    if not start_date:
+        start_date = datetime.now().strftime("%Y-%m-01")
+    if not end_date:
+        # End of next month
+        next_month = datetime.now().replace(day=28) + timedelta(days=4)
+        end_date = (next_month.replace(day=1) + timedelta(days=31)).replace(day=1).strftime("%Y-%m-%d")
+    
+    calendar_data = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "resources": []
+    }
+    
+    # Get resources based on type filter
+    resource_types = [resource_type] if resource_type else ["trainer", "manager", "infrastructure"]
+    
+    for r_type in resource_types:
+        if r_type == "trainer":
+            resources = await db.trainers.find({"is_active": True}, {"_id": 0}).to_list(1000)
+            id_field = "trainer_id"
+        elif r_type == "manager":
+            resources = await db.center_managers.find({"is_active": True}, {"_id": 0}).to_list(1000)
+            id_field = "manager_id"
+        elif r_type == "infrastructure":
+            resources = await db.sdc_infrastructure.find({"is_active": True}, {"_id": 0}).to_list(1000)
+            id_field = "infra_id"
+        else:
+            continue
+        
+        for resource in resources:
+            resource_id = resource.get(id_field)
+            
+            # Get booking history for this resource
+            bookings = await db.resource_bookings.find({
+                "resource_type": r_type,
+                "resource_id": resource_id,
+                "status": "active"
+            }, {"_id": 0}).to_list(100)
+            
+            # Get current assignment details
+            current_assignment = None
+            if resource.get("status") == "assigned":
+                sdc_id = resource.get("assigned_sdc_id")
+                wo_id = resource.get("assigned_work_order_id")
+                
+                if sdc_id:
+                    sdc = await db.sdcs.find_one({"sdc_id": sdc_id}, {"_id": 0, "name": 1, "location": 1})
+                    if sdc:
+                        current_assignment = {
+                            "sdc_id": sdc_id,
+                            "sdc_name": sdc.get("name"),
+                            "location": sdc.get("location"),
+                            "work_order_id": wo_id
+                        }
+                        
+                        # Get work order details for dates
+                        if wo_id:
+                            wo = await db.work_orders.find_one(
+                                {"work_order_id": wo_id}, 
+                                {"_id": 0, "start_date": 1, "calculated_end_date": 1, "work_order_number": 1}
+                            )
+                            if wo:
+                                current_assignment["start_date"] = wo.get("start_date")
+                                current_assignment["end_date"] = wo.get("calculated_end_date")
+                                current_assignment["work_order_number"] = wo.get("work_order_number")
+            
+            calendar_data["resources"].append({
+                "resource_type": r_type,
+                "resource_id": resource_id,
+                "name": resource.get("name") or resource.get("center_name"),
+                "email": resource.get("email"),
+                "phone": resource.get("phone"),
+                "status": resource.get("status", "available"),
+                "specialization": resource.get("specialization") or resource.get("district"),
+                "current_assignment": current_assignment,
+                "booking_history": bookings
+            })
+    
+    # Group by type for easier frontend rendering
+    grouped = {
+        "trainers": [r for r in calendar_data["resources"] if r["resource_type"] == "trainer"],
+        "managers": [r for r in calendar_data["resources"] if r["resource_type"] == "manager"],
+        "infrastructure": [r for r in calendar_data["resources"] if r["resource_type"] == "infrastructure"]
+    }
+    
+    calendar_data["grouped"] = grouped
+    calendar_data["summary"] = {
+        "trainers": {
+            "total": len(grouped["trainers"]),
+            "available": len([r for r in grouped["trainers"] if r["status"] == "available"]),
+            "assigned": len([r for r in grouped["trainers"] if r["status"] == "assigned"])
+        },
+        "managers": {
+            "total": len(grouped["managers"]),
+            "available": len([r for r in grouped["managers"] if r["status"] == "available"]),
+            "assigned": len([r for r in grouped["managers"] if r["status"] == "assigned"])
+        },
+        "infrastructure": {
+            "total": len(grouped["infrastructure"]),
+            "available": len([r for r in grouped["infrastructure"] if r["status"] == "available"]),
+            "in_use": len([r for r in grouped["infrastructure"] if r["status"] == "in_use"])
+        }
+    }
+    
+    return calendar_data
+
+
 # ==================== BURN-DOWN ENDPOINTS ====================
 
 @router.get("/burndown")
