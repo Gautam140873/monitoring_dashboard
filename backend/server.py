@@ -3089,8 +3089,6 @@ async def get_sdc_process_status(sdc_id: str, user: User = Depends(get_current_u
     prev_stage_status = "completed"  # First stage can always start
     prev_stage_completed = target_students  # First stage max is target_students
     
-    stage_order = ["mobilization", "training", "ojt", "assessment", "placement"]
-    
     for idx, stage in enumerate(PROCESS_STAGES):
         stage_data = process_data["stages"].get(stage["stage_id"], {})
         
