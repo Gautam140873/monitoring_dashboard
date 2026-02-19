@@ -27,7 +27,8 @@ import {
   Mail,
   Award,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
