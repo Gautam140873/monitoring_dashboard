@@ -58,8 +58,28 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
 
-// Stage icons mapping
+// Process Stage icons mapping
+const PROCESS_ICONS = {
+  mobilization: Users,
+  training: GraduationCap,
+  ojt: Briefcase,
+  assessment: CheckCircle2,
+  placement: Building2
+};
+
+// Process Stage colors
+const PROCESS_COLORS = {
+  mobilization: "bg-amber-500",
+  training: "bg-blue-500",
+  ojt: "bg-indigo-500",
+  assessment: "bg-purple-500",
+  placement: "bg-emerald-500"
+};
+
+// Legacy Stage icons mapping
 const STAGE_ICONS = {
   mobilization: Users,
   dress_distribution: ClipboardList,
@@ -86,17 +106,24 @@ export default function SDCDetail({ user }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [sdcData, setSdcData] = useState(null);
-  const [activeTab, setActiveTab] = useState("roadmap");
+  const [processStatus, setProcessStatus] = useState(null);
+  const [activeTab, setActiveTab] = useState("process");
   const [showWorkOrderDialog, setShowWorkOrderDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showStartDateDialog, setShowStartDateDialog] = useState(false);
   const [showProgressDialog, setShowProgressDialog] = useState(false);
+  const [showStageUpdateDialog, setShowStageUpdateDialog] = useState(false);
+  const [selectedStage, setSelectedStage] = useState(null);
   const [selectedWorkOrder, setSelectedWorkOrder] = useState(null);
 
   const fetchSDCData = async () => {
     try {
-      const response = await axios.get(`${API}/sdcs/${sdcId}`);
-      setSdcData(response.data);
+      const [sdcRes, processRes] = await Promise.all([
+        axios.get(`${API}/sdcs/${sdcId}`),
+        axios.get(`${API}/sdcs/${sdcId}/process-status`)
+      ]);
+      setSdcData(sdcRes.data);
+      setProcessStatus(processRes.data);
     } catch (error) {
       console.error("Error fetching SDC:", error);
       toast.error("Failed to load SDC data");
@@ -118,6 +145,34 @@ export default function SDCDetail({ user }) {
       currency: 'INR',
       maximumFractionDigits: 0
     }).format(value);
+  };
+
+  // Update process stage
+  const handleUpdateStage = async (stageId, updates) => {
+    try {
+      const params = new URLSearchParams();
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          params.append(key, value);
+        }
+      });
+      await axios.put(`${API}/sdcs/${sdcId}/process-status/stage/${stageId}?${params.toString()}`);
+      toast.success("Stage updated successfully");
+      fetchSDCData();
+    } catch (error) {
+      toast.error("Failed to update stage");
+    }
+  };
+
+  // Update deliverable status
+  const handleUpdateDeliverable = async (deliverableId, status) => {
+    try {
+      await axios.put(`${API}/sdcs/${sdcId}/process-status/deliverable/${deliverableId}?status=${status}`);
+      toast.success("Deliverable updated");
+      fetchSDCData();
+    } catch (error) {
+      toast.error("Failed to update deliverable");
+    }
   };
 
   const handleExport = async (type) => {
