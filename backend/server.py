@@ -3025,6 +3025,238 @@ async def get_sdc(sdc_id: str, user: User = Depends(get_current_user)):
         "invoices": invoices
     }
 
+@api_router.get("/sdcs/{sdc_id}/process-status")
+async def get_sdc_process_status(sdc_id: str, user: User = Depends(get_current_user)):
+    """Get SDC process status with sequential stages and deliverables"""
+    # Access control
+    if user.role == "sdc" and user.assigned_sdc_id != sdc_id:
+        raise HTTPException(status_code=403, detail="Access denied to this SDC")
+    
+    sdc = await db.sdcs.find_one({"sdc_id": sdc_id, "is_deleted": {"$ne": True}}, {"_id": 0})
+    if not sdc:
+        raise HTTPException(status_code=404, detail="SDC not found")
+    
+    # Get target students
+    target_students = sdc.get("target_students", 0)
+    
+    # Get or create process data
+    process_data = await db.sdc_processes.find_one({"sdc_id": sdc_id}, {"_id": 0})
+    
+    if not process_data:
+        # Initialize process data for new SDC
+        process_data = {
+            "process_id": f"proc_{uuid.uuid4().hex[:8]}",
+            "sdc_id": sdc_id,
+            "target_students": target_students,
+            "stages": {},
+            "deliverables": {},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Initialize stages
+        for stage in PROCESS_STAGES:
+            process_data["stages"][stage["stage_id"]] = {
+                "stage_id": stage["stage_id"],
+                "name": stage["name"],
+                "order": stage["order"],
+                "description": stage["description"],
+                "target": target_students,
+                "completed": 0,
+                "in_progress": 0,
+                "pending": target_students,
+                "status": "pending",  # pending, in_progress, completed
+                "start_date": None,
+                "end_date": None,
+                "notes": ""
+            }
+        
+        # Initialize deliverables
+        for deliv in DELIVERABLES:
+            process_data["deliverables"][deliv["deliverable_id"]] = {
+                "deliverable_id": deliv["deliverable_id"],
+                "name": deliv["name"],
+                "description": deliv["description"],
+                "status": "pending",  # pending, completed, not_required
+                "completed_date": None,
+                "notes": ""
+            }
+        
+        await db.sdc_processes.insert_one(process_data.copy())
+    
+    # Calculate flow status (can a stage be started based on previous stage)
+    stages_list = []
+    prev_stage_status = "completed"  # First stage can always start
+    
+    for stage in PROCESS_STAGES:
+        stage_data = process_data["stages"].get(stage["stage_id"], {})
+        
+        # Determine if this stage can be started
+        can_start = prev_stage_status in ["completed", "in_progress"]
+        
+        # Calculate progress percentage
+        target = stage_data.get("target", target_students)
+        completed = stage_data.get("completed", 0)
+        progress_percent = round((completed / target * 100) if target > 0 else 0, 1)
+        
+        stages_list.append({
+            **stage,
+            "target": target,
+            "completed": completed,
+            "in_progress": stage_data.get("in_progress", 0),
+            "pending": max(0, target - completed - stage_data.get("in_progress", 0)),
+            "progress_percent": progress_percent,
+            "status": stage_data.get("status", "pending"),
+            "can_start": can_start,
+            "start_date": stage_data.get("start_date"),
+            "end_date": stage_data.get("end_date"),
+            "notes": stage_data.get("notes", "")
+        })
+        
+        prev_stage_status = stage_data.get("status", "pending")
+    
+    # Deliverables list
+    deliverables_list = []
+    for deliv in DELIVERABLES:
+        deliv_data = process_data["deliverables"].get(deliv["deliverable_id"], {})
+        deliverables_list.append({
+            **deliv,
+            "status": deliv_data.get("status", "pending"),
+            "completed_date": deliv_data.get("completed_date"),
+            "notes": deliv_data.get("notes", "")
+        })
+    
+    # Calculate overall progress
+    total_completed = sum(s["completed"] for s in stages_list)
+    total_target = sum(s["target"] for s in stages_list)
+    overall_progress = round((total_completed / total_target * 100) if total_target > 0 else 0, 1)
+    
+    return {
+        "sdc_id": sdc_id,
+        "sdc_name": sdc.get("name", ""),
+        "target_students": target_students,
+        "overall_progress": overall_progress,
+        "stages": stages_list,
+        "deliverables": deliverables_list,
+        "process_definitions": {
+            "stages": PROCESS_STAGES,
+            "deliverables": DELIVERABLES
+        }
+    }
+
+@api_router.put("/sdcs/{sdc_id}/process-status/stage/{stage_id}")
+async def update_process_stage(
+    sdc_id: str, 
+    stage_id: str, 
+    completed: int = None,
+    in_progress: int = None,
+    status: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    notes: str = None,
+    user: User = Depends(require_ho_role)
+):
+    """Update a process stage for an SDC"""
+    # Validate stage_id
+    valid_stages = [s["stage_id"] for s in PROCESS_STAGES]
+    if stage_id not in valid_stages:
+        raise HTTPException(status_code=400, detail=f"Invalid stage_id. Must be one of: {valid_stages}")
+    
+    # Get or create process data
+    process_data = await db.sdc_processes.find_one({"sdc_id": sdc_id})
+    if not process_data:
+        # Create initial process data
+        await get_sdc_process_status(sdc_id, user)
+        process_data = await db.sdc_processes.find_one({"sdc_id": sdc_id})
+    
+    # Build update
+    update_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if completed is not None:
+        update_fields[f"stages.{stage_id}.completed"] = completed
+        # Auto-update status based on completion
+        sdc = await db.sdcs.find_one({"sdc_id": sdc_id}, {"_id": 0, "target_students": 1})
+        target = sdc.get("target_students", 0)
+        if completed >= target:
+            update_fields[f"stages.{stage_id}.status"] = "completed"
+        elif completed > 0:
+            update_fields[f"stages.{stage_id}.status"] = "in_progress"
+    
+    if in_progress is not None:
+        update_fields[f"stages.{stage_id}.in_progress"] = in_progress
+    
+    if status is not None:
+        if status not in ["pending", "in_progress", "completed"]:
+            raise HTTPException(status_code=400, detail="Status must be: pending, in_progress, or completed")
+        update_fields[f"stages.{stage_id}.status"] = status
+    
+    if start_date is not None:
+        update_fields[f"stages.{stage_id}.start_date"] = start_date
+    
+    if end_date is not None:
+        update_fields[f"stages.{stage_id}.end_date"] = end_date
+    
+    if notes is not None:
+        update_fields[f"stages.{stage_id}.notes"] = notes
+    
+    await db.sdc_processes.update_one(
+        {"sdc_id": sdc_id},
+        {"$set": update_fields}
+    )
+    
+    # Create audit log
+    await create_audit_log(
+        action=AuditAction.UPDATE,
+        entity_type="sdc_processes",
+        entity_id=sdc_id,
+        user_id=user.user_id,
+        user_email=user.email,
+        changes=update_fields
+    )
+    
+    return {"message": f"Stage {stage_id} updated successfully"}
+
+@api_router.put("/sdcs/{sdc_id}/process-status/deliverable/{deliverable_id}")
+async def update_deliverable_status(
+    sdc_id: str,
+    deliverable_id: str,
+    status: str,
+    notes: str = None,
+    user: User = Depends(require_ho_role)
+):
+    """Update a deliverable status for an SDC"""
+    # Validate deliverable_id
+    valid_deliverables = [d["deliverable_id"] for d in DELIVERABLES]
+    if deliverable_id not in valid_deliverables:
+        raise HTTPException(status_code=400, detail=f"Invalid deliverable_id. Must be one of: {valid_deliverables}")
+    
+    # Validate status
+    if status not in ["pending", "completed", "not_required"]:
+        raise HTTPException(status_code=400, detail="Status must be: pending, completed, or not_required")
+    
+    # Get or create process data
+    process_data = await db.sdc_processes.find_one({"sdc_id": sdc_id})
+    if not process_data:
+        await get_sdc_process_status(sdc_id, user)
+    
+    update_fields = {
+        f"deliverables.{deliverable_id}.status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if status == "completed":
+        update_fields[f"deliverables.{deliverable_id}.completed_date"] = datetime.now(timezone.utc).isoformat()
+    
+    if notes is not None:
+        update_fields[f"deliverables.{deliverable_id}.notes"] = notes
+    
+    await db.sdc_processes.update_one(
+        {"sdc_id": sdc_id},
+        {"$set": update_fields}
+    )
+    
+    return {"message": f"Deliverable {deliverable_id} updated to {status}"}
+
 @api_router.delete("/sdcs/{sdc_id}")
 async def delete_sdc(sdc_id: str, user: User = Depends(require_ho_role)):
     """Soft delete SDC (HO only) - Can be recovered within 30 days"""
