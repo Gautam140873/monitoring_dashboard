@@ -6,10 +6,10 @@ from typing import Optional
 from datetime import datetime, timezone
 import uuid
 
-from ..database import db
-from ..models.user import User
-from ..services.auth import get_current_user, require_ho_role
-from ..config import TRAINING_STAGES
+from database import db
+from models.user import User
+from services.auth import get_current_user, require_ho_role
+from config import TRAINING_STAGES
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 

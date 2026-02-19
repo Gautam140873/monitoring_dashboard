@@ -5,12 +5,12 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 
-from ..database import db
-from ..models.user import User
-from ..models.schemas import UserRoleUpdate
-from ..services.auth import get_current_user, require_ho_role
-from ..services.audit import AuditAction, create_audit_log
-from ..services.soft_delete import check_duplicate
+from database import db
+from models.user import User
+from models.schemas import UserRoleUpdate
+from services.auth import get_current_user, require_ho_role
+from services.audit import AuditAction, create_audit_log
+from services.soft_delete import check_duplicate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 

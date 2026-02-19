@@ -7,10 +7,10 @@ import httpx
 import uuid
 import logging
 
-from ..database import db
-from ..models.user import User
-from ..models.schemas import SessionRequest
-from ..services.auth import get_current_user
+from database import db
+from models.user import User
+from models.schemas import SessionRequest
+from services.auth import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = logging.getLogger(__name__)

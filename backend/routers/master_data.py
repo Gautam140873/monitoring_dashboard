@@ -7,17 +7,17 @@ from datetime import datetime, timezone
 import uuid
 import logging
 
-from ..database import db
-from ..models.user import User
-from ..models.schemas import (
+from database import db
+from models.user import User
+from models.schemas import (
     JobRoleMasterCreate, JobRoleMasterUpdate,
     MasterWorkOrderCreate, MasterWorkOrderUpdate,
     SDCDistrictAllocation, SDCFromMasterCreate
 )
-from ..services.auth import get_current_user, require_ho_role
-from ..services.soft_delete import soft_delete_document
-from ..services.utils import create_training_roadmap
-from ..config import CATEGORY_RATES
+from services.auth import get_current_user, require_ho_role
+from services.soft_delete import soft_delete_document
+from services.utils import create_training_roadmap
+from config import CATEGORY_RATES
 
 router = APIRouter(prefix="/master", tags=["Master Data"])
 logger = logging.getLogger(__name__)

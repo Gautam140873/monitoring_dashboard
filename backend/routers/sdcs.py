@@ -7,14 +7,14 @@ from datetime import datetime, timezone
 import uuid
 import logging
 
-from ..database import db
-from ..models.user import User
-from ..models.schemas import SDCCreate, StageUpdateRequest, DeliverableUpdateRequest
-from ..services.auth import get_current_user, require_ho_role
-from ..services.audit import AuditAction, create_audit_log
-from ..services.soft_delete import soft_delete_document
-from ..services.utils import get_or_create_sdc
-from ..config import TRAINING_STAGES, PROCESS_STAGES, DELIVERABLES
+from database import db
+from models.user import User
+from models.schemas import SDCCreate, StageUpdateRequest, DeliverableUpdateRequest
+from services.auth import get_current_user, require_ho_role
+from services.audit import AuditAction, create_audit_log
+from services.soft_delete import soft_delete_document
+from services.utils import get_or_create_sdc
+from config import TRAINING_STAGES, PROCESS_STAGES, DELIVERABLES
 
 router = APIRouter(prefix="/sdcs", tags=["SDCs"])
 logger = logging.getLogger(__name__)

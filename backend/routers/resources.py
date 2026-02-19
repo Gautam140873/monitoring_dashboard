@@ -7,14 +7,14 @@ from datetime import datetime, timezone
 import uuid
 import logging
 
-from ..database import db
-from ..models.user import User
-from ..models.schemas import (
+from database import db
+from models.user import User
+from models.schemas import (
     TrainerCreate, TrainerUpdate,
     CenterManagerCreate, CenterManagerUpdate,
     SDCInfrastructureCreate, SDCInfrastructureUpdate
 )
-from ..services.auth import get_current_user, require_ho_role
+from services.auth import get_current_user, require_ho_role
 
 router = APIRouter(prefix="/resources", tags=["Resources"])
 logger = logging.getLogger(__name__)
