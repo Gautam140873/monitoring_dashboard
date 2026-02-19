@@ -1454,6 +1454,77 @@ async def get_master_work_order(master_wo_id: str, user: User = Depends(require_
     
     return master_wo
 
+@api_router.get("/master/work-orders/{master_wo_id}/allocation-status")
+async def get_job_role_allocation_status(master_wo_id: str, user: User = Depends(require_ho_role)):
+    """Get allocation status for each job role in a Master Work Order (HO only)
+    Shows total target, allocated, and remaining for each job role
+    """
+    master_wo = await db.master_work_orders.find_one({"master_wo_id": master_wo_id}, {"_id": 0})
+    if not master_wo:
+        raise HTTPException(status_code=404, detail="Master Work Order not found")
+    
+    # Get all work orders (batches) created under this master work order
+    work_orders = await db.work_orders.find(
+        {"master_wo_id": master_wo_id, "is_deleted": {"$ne": True}},
+        {"_id": 0, "job_role_id": 1, "num_students": 1, "sdc_id": 1}
+    ).to_list(1000)
+    
+    # Calculate allocated students per job role
+    allocation_by_job_role = {}
+    for wo in work_orders:
+        jr_id = wo.get("job_role_id")
+        if jr_id:
+            if jr_id not in allocation_by_job_role:
+                allocation_by_job_role[jr_id] = {
+                    "allocated": 0,
+                    "sdcs": []
+                }
+            allocation_by_job_role[jr_id]["allocated"] += wo.get("num_students", 0)
+            allocation_by_job_role[jr_id]["sdcs"].append(wo.get("sdc_id"))
+    
+    # Build allocation status for each job role in the master work order
+    job_roles_status = []
+    total_target = 0
+    total_allocated = 0
+    
+    for jr in master_wo.get("job_roles", []):
+        jr_id = jr["job_role_id"]
+        target = jr.get("target", 0)
+        allocated = allocation_by_job_role.get(jr_id, {}).get("allocated", 0)
+        remaining = max(0, target - allocated)
+        
+        total_target += target
+        total_allocated += allocated
+        
+        job_roles_status.append({
+            "job_role_id": jr_id,
+            "job_role_code": jr.get("job_role_code", ""),
+            "job_role_name": jr.get("job_role_name", ""),
+            "rate_per_hour": jr.get("rate_per_hour", 0),
+            "total_training_hours": jr.get("total_training_hours", 0),
+            "target": target,
+            "allocated": allocated,
+            "remaining": remaining,
+            "sdcs_count": len(allocation_by_job_role.get(jr_id, {}).get("sdcs", [])),
+            "is_fully_allocated": remaining == 0
+        })
+    
+    # Get SDC district info
+    num_sdcs_planned = master_wo.get("num_sdcs", 0)
+    sdcs_created = await db.sdcs.count_documents({"master_wo_id": master_wo_id, "is_deleted": {"$ne": True}})
+    
+    return {
+        "master_wo_id": master_wo_id,
+        "work_order_number": master_wo.get("work_order_number"),
+        "total_training_target": master_wo.get("total_training_target", 0),
+        "total_allocated": total_allocated,
+        "total_remaining": max(0, master_wo.get("total_training_target", 0) - total_allocated),
+        "sdcs_planned": num_sdcs_planned,
+        "sdcs_created": sdcs_created,
+        "job_roles": job_roles_status,
+        "is_fully_allocated": total_allocated >= master_wo.get("total_training_target", 0)
+    }
+
 @api_router.put("/master/work-orders/{master_wo_id}")
 async def update_master_work_order(master_wo_id: str, mwo_update: MasterWorkOrderUpdate, user: User = Depends(require_ho_role)):
     """Update Master Work Order (HO only)"""
