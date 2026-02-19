@@ -243,6 +243,10 @@ export default function Dashboard({ user }) {
                       <FileText className="w-4 h-4 mr-2" />
                       Master Data
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/resource-calendar")} data-testid="resource-calendar-link">
+                      <CalendarIcon className="w-4 h-4 mr-2" />
+                      Resource Calendar
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate("/users")} data-testid="users-link">
                       <Users className="w-4 h-4 mr-2" />
                       User Management
