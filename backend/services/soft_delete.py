@@ -4,8 +4,8 @@ Soft delete and recovery services for SkillFlow CRM
 import logging
 from datetime import datetime, timezone
 
-from ..database import db
-from .audit import AuditAction, create_audit_log
+from database import db
+from services.audit import AuditAction, create_audit_log
 
 logger = logging.getLogger(__name__)
 

@@ -4,9 +4,9 @@ Authentication and authorization services for SkillFlow CRM
 from fastapi import HTTPException, Depends, Request
 from datetime import datetime, timezone
 
-from ..database import db
-from ..models.user import User
-from ..config import ROLES
+from database import db
+from models.user import User
+from config import ROLES
 
 
 def has_permission(user_role: str, required_permission: str) -> bool:

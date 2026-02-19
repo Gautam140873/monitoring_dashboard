@@ -5,8 +5,8 @@ import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 
-from ..database import db
-from ..config import TRAINING_STAGES
+from database import db
+from config import TRAINING_STAGES
 
 logger = logging.getLogger(__name__)
 

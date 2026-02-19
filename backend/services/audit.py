@@ -5,7 +5,7 @@ import uuid
 import logging
 from datetime import datetime, timezone
 
-from ..database import db
+from database import db
 
 logger = logging.getLogger(__name__)
 
